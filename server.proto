@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/formancehq/membership/internal/grpc/generated";
+
+package server;
+
+service Server {
+  rpc Connect(ConnectRequest) returns (stream Order) {}
+  rpc Join(stream Message) returns (stream Order) {}
+}
+
+message ConnectRequest {
+  string id = 1;
+  map<string, string> tags = 2;
+  string baseUrl = 3;
+  bool production = 4;
+}
+
+message Order {
+  oneof message {
+    Connected connected = 1;
+    Stack existingStack = 2;
+    DeletedStack deletedStack = 3;
+    Ping ping = 4;
+    UpdateUsageReport updateUsageReport = 5;
+    DisabledStack disabledStack = 6;
+    EnabledStack enabledStack = 7;
+  }
+}
+
+message Message {
+  oneof message {
+    StatusChanged statusChanged = 1;
+    Pong pong = 2;
+  }
+}
+
+message Connected {}
+
+message Ping {}
+
+message Pong {}
+
+message Stack {
+  string clusterName = 1;
+  string seed = 2;
+  AuthConfig authConfig = 3;
+  repeated AuthClient staticClients = 4;
+  StargateConfig stargateConfig = 5;
+  bool disabled = 6;
+  google.protobuf.Timestamp deletedAt = 7;
+}
+
+enum StackStatus {
+  Progressing = 0;
+  Ready = 1;
+  Deleted = 2;
+  Disabled = 3;
+}
+
+message StatusChanged {
+  string clusterName = 1;
+  StackStatus status = 2;
+}
+
+message StargateConfig {
+  bool enabled = 1;
+  string url = 2;
+}
+
+message DeletedStack {
+  string clusterName = 1;
+}
+
+message DisabledStack {
+  string clusterName = 1;
+}
+
+message EnabledStack {
+  string clusterName = 1;
+}
+
+message UpdateUsageReport {
+  string clusterName = 1;
+  string stripeKey = 2;
+  string stripeSubscriptionId = 3;
+}
+
+message AuthConfig {
+  string clientId = 1;
+  string clientSecret = 2;
+  string issuer = 3;
+}
+
+message AuthClient {
+  bool public = 1;
+  string id = 2;
+}
