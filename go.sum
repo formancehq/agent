@@ -27,6 +27,8 @@ github.com/formancehq/go-libs v1.7.1 h1:9D5cxKWFlVtdX5AYDXeUz1Nb9PdoEfQX0f/yeLsU
 github.com/formancehq/go-libs v1.7.1/go.mod h1:pWTScpoyieF7OoJ6WVmXNG9NhDjbZbAmFqd7UOw85iI=
 github.com/formancehq/oidc/v2 v2.0.0-20230524073911-09bdd1dca291 h1:wr0F5Vst5P2ghA3PnuLjg1u+USAdf/3OlIe21w5rgLM=
 github.com/formancehq/oidc/v2 v2.0.0-20230524073911-09bdd1dca291/go.mod h1:vsFNrYCj2x0it0pYmIRVZ12HJ1VGaMVyGl7HLqw5p+Y=
+github.com/formancehq/operator v0.0.0-20240926152017-232ba193ff87 h1:/8dPBu0fBJw1UGPgMKWWJWRFe1X4KPkuWobUX5k+JGQ=
+github.com/formancehq/operator v0.0.0-20240926152017-232ba193ff87/go.mod h1:7KY/n7rGErfNtdvY1NwMvMeQ8nxtDVkxlDCbgfLOLYs=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
 github.com/go-chi/chi/v5 v5.1.0 h1:acVI1TYaD+hhedDJ3r54HyA6sExp3HfXq7QWEEY/xMw=

@@ -1,17 +1,14 @@
 VERSION 0.8
 
-IMPORT github.com/formancehq/earthly:tags/v0.15.0 AS core
-
-IMPORT ../.. AS stack
-IMPORT ../../helm/libs AS helm-libs 
-IMPORT .. AS ee
+IMPORT github.com/formancehq/earthly:tags/v0.16.2 AS core
+IMPORT github.com/formancehq/operator:main AS operator
 
 FROM core+base-image
 
 sources:
     WORKDIR src
-    COPY (../../components/operator+sources/*) /src
-    WORKDIR /src/ee/agent
+    COPY (operator+sources/*) /src
+    WORKDIR /src
     COPY go.* .
     COPY --dir cmd internal tests .
     COPY main.go .
@@ -20,7 +17,7 @@ sources:
 compile:
     FROM core+builder-image
     COPY (+sources/*) /src
-    WORKDIR /src/ee/agent
+    WORKDIR /src
     ARG VERSION=latest
     DO --pass-args core+GO_COMPILE --VERSION=$VERSION
 
@@ -36,8 +33,8 @@ lint:
     FROM core+builder-image
     COPY (+sources/*) /src
     COPY --pass-args +tidy/go.* .
-    WORKDIR /src/ee/agent
-    DO --pass-args stack+GO_LINT
+    WORKDIR /src
+    DO --pass-args core+GO_LINT
     SAVE ARTIFACT cmd AS LOCAL cmd
     SAVE ARTIFACT internal AS LOCAL internal
     SAVE ARTIFACT main.go AS LOCAL main.go
@@ -63,17 +60,13 @@ deploy:
 
 deploy-staging:
     FROM --pass-args core+base-argocd 
-
     ARG --required TAG
-
     ARG APPLICATION=staging-eu-west-1-hosting-regions
     LET SERVER=argocd.internal.formance.cloud
-    
     RUN --secret AUTH_TOKEN \
         argocd app set $APPLICATION \ 
         --parameter agent.image.tag=$TAG \
         --auth-token=$AUTH_TOKEN --server=$SERVER --grpc-web
-
     BUILD --pass-args core+deploy-staging
 
 pre-commit:
@@ -90,14 +83,14 @@ openapi:
 tidy:
     FROM core+builder-image
     COPY --pass-args (+sources/src) /src
-    WORKDIR /src/ee/agent
-    DO --pass-args stack+GO_TIDY
+    WORKDIR /src
+    DO --pass-args core+GO_TIDY
 
 generate:
     FROM core+builder-image
     DO --pass-args core+GO_INSTALL --package=go.uber.org/mock/mockgen@latest
     COPY (+sources/*) /src
-    WORKDIR /src/ee/agent    
+    WORKDIR /src    
     RUN go generate -run mockgen ./...
     SAVE ARTIFACT internal AS LOCAL internal
 
@@ -119,7 +112,7 @@ tests:
     DO --pass-args core+GO_INSTALL --package=github.com/onsi/ginkgo/v2/ginkgo@v2.14.0
     COPY --pass-args +sources/* /src
     COPY --pass-args ../../components/operator+manifests/config /src/components/operator/config
-    WORKDIR /src/ee/agent
+    WORKDIR /src
     COPY tests tests
     COPY internal internal
     ARG GOPROXY
@@ -136,14 +129,11 @@ tests:
 helm-validate:
     FROM core+helm-base
     WORKDIR /src
-
-    COPY (helm-libs+sources/*) helm/libs/
     COPY --dir helm ee/agent/
-
-    WORKDIR /src/ee/agent/helm
+    WORKDIR /src/helm
     RUN helm dependencies update
     DO --pass-args core+HELM_VALIDATE
-    SAVE ARTIFACT /src/ee/agent/helm AS LOCAL helm
+    SAVE ARTIFACT /src/helm AS LOCAL helm
 
 helm-package:
     FROM +helm-validate
@@ -153,4 +143,7 @@ helm-package:
     SAVE ARTIFACT . AS LOCAL helm
 
 release:
-    BUILD --pass-args stack+goreleaser --path=ee/agent
+    FROM core+builder-image
+    ARG mode=local
+    COPY --dir . /src
+    DO core+GORELEASER --mode=$mode
