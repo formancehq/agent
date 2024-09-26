@@ -111,7 +111,8 @@ tests:
     ENV KUBEBUILDER_ASSETS /root/.local/share/kubebuilder-envtest/k8s/$ENVTEST_VERSION-linux-$(go env GOHOSTARCH)
     DO --pass-args core+GO_INSTALL --package=github.com/onsi/ginkgo/v2/ginkgo@v2.14.0
     COPY --pass-args +sources/* /src
-    COPY --pass-args ../../components/operator+manifests/config /src/components/operator/config
+    COPY --pass-args operator+manifests/config /components/operator/config
+    COPY (operator+sources/*) /src
     WORKDIR /src
     COPY tests tests
     COPY internal internal
