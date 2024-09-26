@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.7
 
 require (
-	github.com/alitto/pond v1.8.3
+	github.com/alitto/pond v1.9.2
 	github.com/formancehq/go-libs v1.7.1
 	github.com/formancehq/operator v0.0.0-20240926152017-232ba193ff87
 	github.com/google/uuid v1.6.0
