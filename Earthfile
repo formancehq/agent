@@ -130,10 +130,10 @@ helm-validate:
     FROM core+helm-base
     WORKDIR /src
     COPY --dir helm ee/agent/
-    WORKDIR /src/helm
+    WORKDIR /src/ee/agent/helm
     RUN helm dependencies update
     DO --pass-args core+HELM_VALIDATE
-    SAVE ARTIFACT /src/helm AS LOCAL helm
+    SAVE ARTIFACT /src/ee/agent/helm AS LOCAL helm
 
 helm-package:
     FROM +helm-validate
