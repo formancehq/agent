@@ -108,7 +108,9 @@ deploy:
         BUILD --pass-args +build-image --tag=$tag
     END
     FROM --pass-args core+vcluster-deployer-image
-    COPY helm helm
+
+    ARG branch=main
+    COPY --dir (github.com/formancehq/helm/charts/agent:$branch+validate/*) helm/
     COPY .earthly .earthly
     ARG --required user
     RUN --secret tld helm upgrade --namespace formance-system \
