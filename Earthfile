@@ -39,44 +39,6 @@ lint:
     SAVE ARTIFACT internal AS LOCAL internal
     SAVE ARTIFACT main.go AS LOCAL main.go
 
-deploy:
-    COPY (+sources/*) /src
-    LET tag=$(tar cf - /src | sha1sum | awk '{print $1}')
-    WAIT
-        BUILD --pass-args +build-image --tag=$tag
-    END
-    FROM --pass-args core+vcluster-deployer-image
-    COPY helm helm
-    COPY .earthly .earthly
-    ARG --required user
-    RUN --secret tld helm upgrade --namespace formance-system \
-        --create-namespace \
-        --install \
-        -f .earthly/values.yaml \
-        --set image.tag=$tag \
-        --set agent.baseUrl=https://$user.$tld \
-        --set server.address=$user.$tld:443 \
-        formance-membership-agent ./helm
-
-deploy-staging:
-    FROM --pass-args core+base-argocd 
-    ARG --required TAG
-    ARG APPLICATION=staging-eu-west-1-hosting-regions
-    LET SERVER=argocd.internal.formance.cloud
-    RUN --secret AUTH_TOKEN \
-        argocd app set $APPLICATION \ 
-        --parameter agent.image.tag=$TAG \
-        --auth-token=$AUTH_TOKEN --server=$SERVER --grpc-web
-    BUILD --pass-args core+deploy-staging
-
-pre-commit:
-    BUILD --pass-args +helm-validate
-    WAIT
-        BUILD --pass-args +tidy
-    END
-    BUILD --pass-args +lint
-
-
 openapi:
     RUN echo "not implemented"
 
@@ -126,22 +88,43 @@ tests:
     RUN --mount=type=cache,id=gomod,target=$GOPATH/pkg/mod \
         --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
         ginkgo --focus=$focus -p ./tests/...
-    
-helm-validate:
-    FROM core+helm-base
-    WORKDIR /src
-    COPY --dir helm ee/agent/
-    WORKDIR /src/ee/agent/helm
-    RUN helm dependencies update
-    DO --pass-args core+HELM_VALIDATE
-    SAVE ARTIFACT /src/ee/agent/helm AS LOCAL helm
 
-helm-package:
-    FROM +helm-validate
-    RUN helm package .
-    SAVE ARTIFACT /src
 
-    SAVE ARTIFACT . AS LOCAL helm
+deploy-staging:
+    FROM --pass-args core+base-argocd 
+    ARG --required TAG
+    ARG APPLICATION=staging-eu-west-1-hosting-regions
+    LET SERVER=argocd.internal.formance.cloud
+    RUN --secret AUTH_TOKEN \
+        argocd app set $APPLICATION \ 
+        --parameter agent.image.tag=$TAG \
+        --auth-token=$AUTH_TOKEN --server=$SERVER --grpc-web
+    BUILD --pass-args core+deploy-staging
+
+deploy:
+    COPY (+sources/*) /src
+    LET tag=$(tar cf - /src | sha1sum | awk '{print $1}')
+    WAIT
+        BUILD --pass-args +build-image --tag=$tag
+    END
+    FROM --pass-args core+vcluster-deployer-image
+    COPY helm helm
+    COPY .earthly .earthly
+    ARG --required user
+    RUN --secret tld helm upgrade --namespace formance-system \
+        --create-namespace \
+        --install \
+        -f .earthly/values.yaml \
+        --set image.tag=$tag \
+        --set agent.baseUrl=https://$user.$tld \
+        --set server.address=$user.$tld:443 \
+        formance-membership-agent ./helm
+
+pre-commit:
+    WAIT
+        BUILD --pass-args +tidy
+    END
+    BUILD --pass-args +lint
 
 release:
     FROM core+builder-image
