@@ -1,9 +1,6 @@
 module github.com/formancehq/stack/components/agent
 
 go 1.22.0
-
-toolchain go1.22.7
-
 require (
 	github.com/alitto/pond v1.8.3
 	github.com/formancehq/go-libs v1.7.1
@@ -22,7 +19,7 @@ require (
 	go.uber.org/fx v1.22.2
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.23.0
-	google.golang.org/grpc v1.67.0
+	google.golang.org/grpc v1.68.0
 	google.golang.org/protobuf v1.34.2
 	k8s.io/apiextensions-apiserver v0.29.0
 	k8s.io/apimachinery v0.29.0
