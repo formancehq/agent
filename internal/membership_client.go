@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/formancehq/go-libs/logging"
@@ -19,6 +20,7 @@ const (
 	metadataID           = "id"
 	metadataBaseUrl      = "baseUrl"
 	metadataProduction   = "production"
+	metadataOutdated     = "outdated"
 	metadataVersion      = "version"
 	metadataCapabilities = "capabilities"
 
@@ -54,17 +56,12 @@ func (c *membershipClient) connectMetadata(ctx context.Context, modules []string
 
 	md.Append(metadataID, c.clientInfo.ID)
 	md.Append(metadataBaseUrl, c.clientInfo.BaseUrl.String())
-	md.Append(metadataProduction, func() string {
-		if c.clientInfo.Production {
-			return "true"
-		}
-		return "false"
-	}())
+	md.Append(metadataProduction, strconv.FormatBool(c.clientInfo.Production))
+	md.Append(metadataOutdated, strconv.FormatBool(c.clientInfo.Outdated))
 	md.Append(metadataVersion, c.clientInfo.Version)
 	md.Append(metadataCapabilities, capabilityEE, capabilityModuleList)
 	md.Append(capabilityModuleList, modules...)
 	md.Append(capabilityEE, eeModules...)
-
 	return md, nil
 }
 
@@ -93,7 +90,7 @@ func (c *membershipClient) connect(ctx context.Context, modules []string, eeModu
 		),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
-	conn, err := grpc.Dial(c.address, opts...)
+	conn, err := grpc.NewClient(c.address, opts...)
 	if err != nil {
 		return err
 	}
