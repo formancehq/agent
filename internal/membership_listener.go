@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
@@ -44,7 +42,7 @@ type MembershipClientMock struct {
 	messages []*generated.Message
 }
 
-func (m MembershipClientMock) Orders() chan *generated.Order {
+func (m *MembershipClientMock) Orders() chan *generated.Order {
 	return m.orders
 }
 
@@ -67,8 +65,10 @@ func NewMembershipClientMock() *MembershipClientMock {
 }
 
 type ClientInfo struct {
-	ID         string
-	BaseUrl    *url.URL
+	ID      string
+	BaseUrl *url.URL
+
+	Outdated   bool
 	Production bool
 	Version    string
 }
@@ -92,7 +92,7 @@ func (c *membershipListener) Start(ctx context.Context) {
 			}
 
 			c.wp.Submit(func() {
-				ctx, span := otel.GetTracerProvider().Tracer("com.formance.agent").Start(ctx, "newOrder", trace.WithNewRoot())
+				ctx, span := tracer.Start(ctx, "NewOrder")
 				defer span.End()
 				logging.FromContext(ctx).
 					WithField("traceId", span.SpanContext().TraceID()).

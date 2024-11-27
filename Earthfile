@@ -116,6 +116,7 @@ deploy:
     RUN --secret tld helm upgrade --namespace formance-system \
         --create-namespace \
         --install \
+        --wait \
         -f .earthly/values.yaml \
         --set image.tag=$tag \
         --set agent.baseUrl=https://$user.$tld \

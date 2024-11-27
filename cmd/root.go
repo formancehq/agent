@@ -44,6 +44,7 @@ const (
 	authenticationClientSecretFlag = "authentication-client-secret"
 	baseUrlFlag                    = "base-url"
 	productionFlag                 = "production"
+	outdatedFlag                   = "outdated"
 	resyncPeriodFlag               = "resync-period"
 )
 
@@ -78,6 +79,7 @@ func init() {
 	rootCmd.Flags().String(authenticationIssuerFlag, "", "")
 	rootCmd.Flags().String(baseUrlFlag, "", "")
 	rootCmd.Flags().Bool(productionFlag, false, "Is a production agent")
+	rootCmd.Flags().Bool(outdatedFlag, false, "Set the region as outdated when connecting")
 	rootCmd.Flags().Duration(resyncPeriodFlag, 5*time.Minute, "Resync period of K8S resources")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
@@ -129,6 +131,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 
 	isProduction, _ := cmd.Flags().GetBool(productionFlag)
 	resyncPeriod, _ := cmd.Flags().GetDuration(resyncPeriodFlag)
+	outdated, _ := cmd.Flags().GetBool(outdatedFlag)
 
 	options := []fx.Option{
 		fx.Supply(restConfig),
@@ -137,6 +140,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 			ID:         agentID,
 			BaseUrl:    baseUrl,
 			Production: isProduction,
+			Outdated:   outdated,
 			Version:    Version,
 		}, resyncPeriod, dialOptions...),
 		otlptraces.FXModuleFromFlags(cmd),
