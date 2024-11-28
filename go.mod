@@ -17,8 +17,8 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/zitadel/oidc/v2 v2.12.2
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0
-	go.opentelemetry.io/otel v1.30.0
-	go.opentelemetry.io/otel/trace v1.30.0
+	go.opentelemetry.io/otel v1.32.0
+	go.opentelemetry.io/otel/trace v1.32.0
 	go.uber.org/fx v1.22.2
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.23.0
@@ -86,7 +86,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.30.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.30.0 // indirect
 	go.opentelemetry.io/otel/log v0.6.0 // indirect
-	go.opentelemetry.io/otel/metric v1.30.0 // indirect
+	go.opentelemetry.io/otel/metric v1.32.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.30.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/dig v1.18.0 // indirect
