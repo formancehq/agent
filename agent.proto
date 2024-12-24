@@ -7,7 +7,6 @@ option go_package = "github.com/formancehq/membership/internal/grpc/generated";
 package server;
 
 service Server {
-  rpc Connect(ConnectRequest) returns (stream Order) {}
   rpc Join(stream Message) returns (stream Order) {}
 }
 

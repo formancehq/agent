@@ -24,7 +24,6 @@ agent:
   id: "dev-public-region"
   baseUrl: ""
   production: false
-  outdated: true
   # Authentication token
   authentication:
     mode: token
