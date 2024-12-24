@@ -1,8 +1,6 @@
 module github.com/formancehq/stack/components/agent
 
-go 1.22.0
-
-toolchain go1.22.7
+go 1.23.0
 
 require (
 	github.com/alitto/pond v1.8.3
