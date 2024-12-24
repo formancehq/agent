@@ -22,7 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServerClient interface {
-	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (Server_ConnectClient, error)
 	Join(ctx context.Context, opts ...grpc.CallOption) (Server_JoinClient, error)
 }
 
@@ -34,40 +33,8 @@ func NewServerClient(cc grpc.ClientConnInterface) ServerClient {
 	return &serverClient{cc}
 }
 
-func (c *serverClient) Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (Server_ConnectClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Server_ServiceDesc.Streams[0], "/server.Server/Connect", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &serverConnectClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Server_ConnectClient interface {
-	Recv() (*Order, error)
-	grpc.ClientStream
-}
-
-type serverConnectClient struct {
-	grpc.ClientStream
-}
-
-func (x *serverConnectClient) Recv() (*Order, error) {
-	m := new(Order)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *serverClient) Join(ctx context.Context, opts ...grpc.CallOption) (Server_JoinClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Server_ServiceDesc.Streams[1], "/server.Server/Join", opts...)
+	stream, err := c.cc.NewStream(ctx, &Server_ServiceDesc.Streams[0], "/server.Server/Join", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +68,6 @@ func (x *serverJoinClient) Recv() (*Order, error) {
 // All implementations must embed UnimplementedServerServer
 // for forward compatibility
 type ServerServer interface {
-	Connect(*ConnectRequest, Server_ConnectServer) error
 	Join(Server_JoinServer) error
 	mustEmbedUnimplementedServerServer()
 }
@@ -110,9 +76,6 @@ type ServerServer interface {
 type UnimplementedServerServer struct {
 }
 
-func (UnimplementedServerServer) Connect(*ConnectRequest, Server_ConnectServer) error {
-	return status.Errorf(codes.Unimplemented, "method Connect not implemented")
-}
 func (UnimplementedServerServer) Join(Server_JoinServer) error {
 	return status.Errorf(codes.Unimplemented, "method Join not implemented")
 }
@@ -127,27 +90,6 @@ type UnsafeServerServer interface {
 
 func RegisterServerServer(s grpc.ServiceRegistrar, srv ServerServer) {
 	s.RegisterService(&Server_ServiceDesc, srv)
-}
-
-func _Server_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ConnectRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ServerServer).Connect(m, &serverConnectServer{stream})
-}
-
-type Server_ConnectServer interface {
-	Send(*Order) error
-	grpc.ServerStream
-}
-
-type serverConnectServer struct {
-	grpc.ServerStream
-}
-
-func (x *serverConnectServer) Send(m *Order) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 func _Server_Join_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -184,11 +126,6 @@ var Server_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServerServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "Connect",
-			Handler:       _Server_Connect_Handler,
-			ServerStreams: true,
-		},
 		{
 			StreamName:    "Join",
 			Handler:       _Server_Join_Handler,

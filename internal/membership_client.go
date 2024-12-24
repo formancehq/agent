@@ -34,7 +34,7 @@ type membershipClient struct {
 	stopped    chan struct{}
 
 	serverClient   generated.ServerClient
-	connectClient  generated.Server_ConnectClient
+	connectClient  generated.Server_JoinClient
 	connectContext context.Context
 	connectCancel  func()
 	authenticator  Authenticator
