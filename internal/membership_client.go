@@ -33,11 +33,12 @@ type membershipClient struct {
 	stopChan   chan chan error
 	stopped    chan struct{}
 
-	serverClient   generated.ServerClient
-	connectClient  generated.Server_ConnectClient
-	connectContext context.Context
-	connectCancel  func()
-	authenticator  Authenticator
+	serverClient generated.ServerClient
+	joinClient   generated.Server_JoinClient
+	joinContext  context.Context
+	joinCancel   func()
+
+	authenticator Authenticator
 
 	orders chan *generated.Order
 	opts   []grpc.DialOption
@@ -82,7 +83,7 @@ func (c *membershipClient) connect(ctx context.Context, modules []string, eeModu
 	logging.FromContext(ctx).WithFields(map[string]any{
 		"id": c.clientInfo.ID,
 	}).Infof("Establish connection to server")
-	c.connectContext, c.connectCancel = context.WithCancel(ctx)
+	c.joinContext, c.joinCancel = context.WithCancel(ctx)
 
 	opts := append(c.opts,
 		grpc.WithChainStreamInterceptor(
@@ -101,12 +102,12 @@ func (c *membershipClient) connect(ctx context.Context, modules []string, eeModu
 	if err != nil {
 		return err
 	}
-	connectContext := metadata.NewOutgoingContext(c.connectContext, md)
-	connectClient, err := c.serverClient.Join(connectContext)
+	connectContext := metadata.NewOutgoingContext(c.joinContext, md)
+	joinClient, err := c.serverClient.Join(connectContext)
 	if err != nil {
 		return err
 	}
-	c.connectClient = connectClient
+	c.joinClient = joinClient
 
 	return nil
 }
@@ -121,7 +122,7 @@ func (c *membershipClient) Send(message *generated.Message) error {
 }
 
 func (c *membershipClient) sendPong(ctx context.Context) {
-	if err := c.connectClient.SendMsg(&generated.Message{
+	if err := c.joinClient.SendMsg(&generated.Message{
 		Message: &generated.Message_Pong{
 			Pong: &generated.Pong{},
 		},
@@ -140,8 +141,8 @@ func (c *membershipClient) Start(ctx context.Context) error {
 	)
 	go func() {
 		for {
-			msg := &generated.Order{}
-			if err := c.connectClient.RecvMsg(msg); err != nil {
+			msg, err := c.joinClient.Recv()
+			if err != nil {
 				if err == io.EOF {
 					select {
 					case <-c.stopped:
@@ -183,15 +184,17 @@ func (c *membershipClient) Start(ctx context.Context) error {
 			return ctx.Err()
 		case ch := <-c.stopChan:
 			close(c.stopped)
-			if err := c.connectClient.CloseSend(); err != nil {
+			if err := c.joinClient.CloseSend(); err != nil {
 				ch <- err
 				//nolint:nilerr
 				return nil
 			}
-			c.connectCancel()
+			c.joinCancel()
+
+			// Drain messages
 			for {
-				msg := &generated.Order{}
-				if err := c.connectClient.RecvMsg(msg); err != nil { // Drain messages
+				_, err := c.joinClient.Recv()
+				if err != nil {
 					break
 				}
 			}
@@ -199,7 +202,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 			ch <- nil
 			return nil
 		case msg := <-c.messages:
-			if err := c.connectClient.SendMsg(msg); err != nil {
+			if err := c.joinClient.SendMsg(msg); err != nil {
 				panic(err)
 			}
 			<-time.After(50 * time.Millisecond)
