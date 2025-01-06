@@ -190,9 +190,11 @@ func (c *membershipClient) Start(ctx context.Context) error {
 				return nil
 			}
 			c.joinCancel()
+
+			// Drain messages
 			for {
 				_, err := c.joinClient.Recv()
-				if err != nil { // Drain messages
+				if err != nil {
 					break
 				}
 			}
