@@ -71,9 +71,9 @@ tests:
     ENV ENVTEST_VERSION 1.28.0
     RUN setup-envtest use $ENVTEST_VERSION -p path
     ENV KUBEBUILDER_ASSETS /root/.local/share/kubebuilder-envtest/k8s/$ENVTEST_VERSION-linux-$(go env GOHOSTARCH)
-    DO --pass-args core+GO_INSTALL --package=github.com/onsi/ginkgo/v2/ginkgo@v2.14.0
+    DO --pass-args core+GO_INSTALL --package=github.com/onsi/ginkgo/v2/ginkgo@v2.22
     COPY --pass-args +sources/* /src
-    COPY --pass-args operator+manifests/config /components/operator/config
+    COPY --pass-args operator+manifests/config /operator/config
     COPY (operator+sources/*) /src
     WORKDIR /src
     COPY tests tests
@@ -109,7 +109,7 @@ deploy:
     END
     FROM --pass-args core+vcluster-deployer-image
 
-    ARG branch=main
+    ARG branch=agent-2.4.1
     COPY --dir (github.com/formancehq/helm/charts/agent:$branch+validate/*) helm/
     COPY .earthly .earthly
     ARG --required user

@@ -166,9 +166,6 @@ var _ = Describe("Informer modules", func() {
 				var moduleDeleted *unstructured.Unstructured
 				BeforeEach(func() {
 					for gvk, module := range modules {
-						if gvk.Kind != "Reconciliation" {
-							continue
-						}
 						By(fmt.Sprintf("Deleting the module %s", gvk.Kind), func() {
 							moduleDeleted = module
 							restMapping, err := restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
