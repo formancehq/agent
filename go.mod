@@ -3,7 +3,7 @@ module github.com/formancehq/stack/components/agent
 go 1.23.0
 
 require (
-	github.com/alitto/pond v1.8.3
+	github.com/alitto/pond v1.9.2
 	github.com/formancehq/go-libs v1.7.1
 	github.com/formancehq/operator v0.0.0-20250210093134-ce63130694d7
 	github.com/google/uuid v1.6.0
