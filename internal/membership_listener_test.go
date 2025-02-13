@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"path/filepath"
 	osRuntime "runtime"
@@ -13,6 +14,7 @@ import (
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -37,7 +39,7 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	require.NoError(t, v1beta1.AddToScheme(scheme.Scheme))
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "..", "..", "..", "components", "operator",
+			filepath.Join(filepath.Dir(filename), "..", "..", "operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
@@ -205,4 +207,78 @@ func TestSyncAuthClients(t *testing.T) {
 		}, 5*time.Second, 500*time.Millisecond)
 
 	})
+}
+
+func TestSyncStargate(t *testing.T) {
+	type testCase struct {
+		enabled bool
+	}
+	letter := []rune("abcdefghijklmnopqrstuvwxyz")
+	rand := func(i int) string {
+		b := make([]rune, i)
+		for i := range b {
+			b[i] = letter[rand.Intn(len(letter))]
+		}
+		return string(b)
+	}
+
+	for _, tcase := range []testCase{
+		{
+			enabled: true,
+		},
+		{},
+	} {
+		t.Run(fmt.Sprintf("%s enabled=%t", t.Name(), tcase.enabled), func(t *testing.T) {
+			test(t, func(ctx context.Context, tc *testConfig) {
+				t.Parallel()
+				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock())
+
+				stackName := uuid.NewString() + "-" + rand(4)
+				stackuid := uuid.NewString()
+				stack := &unstructured.Unstructured{}
+				stack.SetName(stackName)
+				stack.SetUID(types.UID(stackuid))
+
+				stargateConfig := &generated.StargateConfig{
+					Enabled: true,
+				}
+
+				// Create a stargate module
+				listener.syncStargate(ctx, map[string]any{}, stack, &generated.Stack{
+					AuthConfig:     &generated.AuthConfig{},
+					StargateConfig: stargateConfig,
+				})
+				fStargate := &v1beta1.Stargate{}
+				require.Eventually(t, func() bool {
+					return tc.client.Get().Resource("Stargates").Name(stackName).Do(ctx).Into(fStargate) == nil
+				}, 5*time.Second, 500*time.Millisecond)
+
+				// Sync depending of the config
+				listener.syncStargate(ctx, map[string]any{}, stack, &generated.Stack{
+					StargateConfig: &generated.StargateConfig{
+						Enabled: tcase.enabled,
+					},
+					AuthConfig: &generated.AuthConfig{
+						ClientId: uuid.NewString(),
+					},
+				})
+
+				if !tcase.enabled {
+					require.Eventually(t, func() bool {
+						err := tc.client.Get().Resource("Stargates").Name(stackName).Do(ctx).Error()
+						return err != nil && apierrors.IsNotFound(err)
+					}, 5*time.Second, 500*time.Millisecond)
+					return
+				} else {
+					require.Eventually(t, func() bool {
+						stargate := &v1beta1.Stargate{}
+						err := tc.client.Get().Resource("Stargates").Name(stackName).Do(ctx).Into(stargate)
+						return err == nil && stargate.ResourceVersion != fStargate.ResourceVersion
+					}, 5*time.Second, 500*time.Millisecond)
+				}
+			})
+		})
+
+	}
+
 }

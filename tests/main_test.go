@@ -35,9 +35,10 @@ var _ = BeforeSuite(func() {
 
 	Expect(v1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 
+	//TODO: change this and download the CRDs from a repository target
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "..", "..", "..", "components", "operator",
+			filepath.Join(filepath.Dir(filename), "..", "..", "operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,

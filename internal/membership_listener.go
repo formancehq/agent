@@ -219,7 +219,7 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 					},
 				},
 			}); client.IgnoreNotFound(err) != nil {
-				logger.Errorf("Unable to create module Stargate cluster side: %s", err)
+				logger.Errorf("Unable to create module Gateway cluster side: %s", err)
 			}
 		default:
 			if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, gvk, map[string]any{
@@ -239,9 +239,10 @@ func (c *membershipListener) deleteModule(ctx context.Context, logger logging.Lo
 }
 
 func (c *membershipListener) syncStargate(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
-	stargateName := fmt.Sprintf("%s-stargate", membershipStack.ClusterName)
+	logger := logging.FromContext(ctx).WithField("stack", stack.GetName())
 	if membershipStack.StargateConfig != nil && membershipStack.StargateConfig.Enabled {
 		parts := strings.Split(stack.GetName(), "-")
+		logger.Debug("Stargate is enabled")
 
 		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, v1beta1.GroupVersion.WithKind("Stargate"), map[string]any{
 			"metadata": metadata,
@@ -256,11 +257,12 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 				},
 			},
 		}); err != nil {
-			logging.FromContext(ctx).Errorf("Unable to create module Stargate cluster side: %s", err)
+			logger.Errorf("Unable to create module Stargate cluster side: %s", err)
 		}
 	} else {
-		if err := c.client.EnsureNotExists(ctx, "Stargates", stargateName); err != nil {
-			logging.FromContext(ctx).Errorf("Unable to delete module Stargate cluster side: %s", err)
+		logger.Debug("Stargate is disabled")
+		if err := c.client.EnsureNotExists(ctx, "Stargates", stack.GetName()); err != nil {
+			logger.Errorf("Unable to delete module Stargate cluster side: %s", err)
 		}
 	}
 }
