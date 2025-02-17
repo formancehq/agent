@@ -11,7 +11,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.9.0
 	github.com/zitadel/oidc/v2 v2.12.2
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0
@@ -74,7 +74,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/riandyrn/otelchi v0.10.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otellogrus v0.3.2 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelutil v0.3.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.55.0 // indirect
