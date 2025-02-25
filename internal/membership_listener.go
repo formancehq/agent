@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
@@ -82,6 +84,28 @@ type membershipListener struct {
 	wp         *pond.WorkerPool
 }
 
+// This need to match membership
+const (
+	otelCtx = "_otelCtx"
+)
+
+func extractOtelCtxFromOrder(ctx context.Context, order *generated.Order) context.Context {
+	if header, ok := order.Metadata[otelCtx]; !ok || ok && header == "" {
+		logging.FromContext(ctx).Errorf("otel context not found")
+		return ctx
+	}
+
+	carrier := propagation.MapCarrier{}
+	if err := json.Unmarshal([]byte(order.Metadata[otelCtx]), &carrier); err == nil {
+		ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+		logging.FromContext(ctx).Debug("otel context extracted")
+		return ctx
+	}
+
+	logging.FromContext(ctx).Error("cannot extract otel context")
+	return ctx
+}
+
 func (c *membershipListener) Start(ctx context.Context) {
 	defer c.wp.StopAndWait()
 	for {
@@ -92,6 +116,9 @@ func (c *membershipListener) Start(ctx context.Context) {
 			}
 
 			c.wp.Submit(func() {
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				ctx = extractOtelCtxFromOrder(ctx, msg)
 				ctx, span := tracer.Start(ctx, "NewOrder")
 				defer span.End()
 				logging.FromContext(ctx).
@@ -100,16 +127,16 @@ func (c *membershipListener) Start(ctx context.Context) {
 					Infof("Got message from membership: %T", msg.GetMessage())
 				switch msg := msg.Message.(type) {
 				case *generated.Order_ExistingStack:
-					span.SetName("syncExistingStack")
+					span.SetName("SyncExistingStack")
 					c.syncExistingStack(ctx, msg.ExistingStack)
 				case *generated.Order_DeletedStack:
-					span.SetName("deleteStack")
+					span.SetName("DeleteStack")
 					c.deleteStack(ctx, msg.DeletedStack)
 				case *generated.Order_DisabledStack:
-					span.SetName("disableStack")
+					span.SetName("DisableStack")
 					c.disableStack(ctx, msg.DisabledStack)
 				case *generated.Order_EnabledStack:
-					span.SetName("enableStack")
+					span.SetName("EnableStack")
 					c.enableStack(ctx, msg.EnabledStack)
 				}
 			})
@@ -317,7 +344,6 @@ func (c *membershipListener) deleteStack(ctx context.Context, stack *generated.D
 }
 
 func (c *membershipListener) disableStack(ctx context.Context, stack *generated.DisabledStack) {
-
 	if err := c.client.Patch(ctx, "Stacks", stack.ClusterName, []byte(`{"spec": {"disabled": true}}`)); err != nil {
 		logging.FromContext(ctx).Errorf("Disabling cluster side: %s", err)
 		return
