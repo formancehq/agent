@@ -2,10 +2,11 @@ package internal
 
 import (
 	"fmt"
-	"k8s.io/client-go/kubernetes/scheme"
 	"reflect"
 
-	"github.com/formancehq/go-libs/pointer"
+	"k8s.io/client-go/kubernetes/scheme"
+
+	"github.com/formancehq/go-libs/v2/pointer"
 	gomegaTypes "github.com/onsi/gomega/types"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
