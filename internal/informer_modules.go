@@ -3,7 +3,7 @@ package internal
 import (
 	"reflect"
 
-	"github.com/formancehq/go-libs/logging"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"google.golang.org/protobuf/types/known/structpb"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

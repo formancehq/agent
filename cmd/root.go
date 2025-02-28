@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/formancehq/go-libs/licence"
-	sharedlogging "github.com/formancehq/go-libs/logging"
-	"github.com/formancehq/go-libs/otlp/otlptraces"
-	"github.com/formancehq/go-libs/service"
+	"github.com/formancehq/go-libs/v2/licence"
+	"github.com/formancehq/go-libs/v2/logging"
+	"github.com/formancehq/go-libs/v2/otlp"
+	"github.com/formancehq/go-libs/v2/otlp/otlptraces"
+	"github.com/formancehq/go-libs/v2/service"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/pkg/errors"
@@ -64,6 +65,7 @@ func init() {
 	}
 
 	service.AddFlags(rootCmd.PersistentFlags())
+	otlp.AddFlags(rootCmd.PersistentFlags())
 	otlptraces.AddFlags(rootCmd.PersistentFlags())
 	licence.AddFlags(rootCmd.PersistentFlags())
 
@@ -143,6 +145,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 			Outdated:   outdated,
 			Version:    Version,
 		}, resyncPeriod, dialOptions...),
+		otlp.FXModuleFromFlags(cmd, otlp.WithServiceVersion(Version)),
 		otlptraces.FXModuleFromFlags(cmd),
 		licence.FXModuleFromFlags(cmd, ServiceName),
 	}
@@ -184,14 +187,14 @@ func createGRPCTransportCredentials(cmd *cobra.Command) (credentials.TransportCr
 	var credential credentials.TransportCredentials
 	tlsEnabled, _ := cmd.Flags().GetBool(tlsEnabledFlag)
 	if !tlsEnabled {
-		sharedlogging.FromContext(cmd.Context()).Infof("TLS not enabled")
+		logging.FromContext(cmd.Context()).Infof("TLS not enabled")
 		credential = insecure.NewCredentials()
 	} else {
-		sharedlogging.FromContext(cmd.Context()).Infof("TLS enabled")
+		logging.FromContext(cmd.Context()).Infof("TLS enabled")
 		certPool := x509.NewCertPool()
 		ca, _ := cmd.Flags().GetString(tlsCACertificateFlag)
 		if ca != "" {
-			sharedlogging.FromContext(cmd.Context()).Infof("Load server certificate from config")
+			logging.FromContext(cmd.Context()).Infof("Load server certificate from config")
 			if !certPool.AppendCertsFromPEM([]byte(ca)) {
 				return nil, fmt.Errorf("failed to add server CA's certificate")
 			}
@@ -199,7 +202,7 @@ func createGRPCTransportCredentials(cmd *cobra.Command) (credentials.TransportCr
 
 		tlsInsecure, _ := cmd.Flags().GetBool(tlsInsecureSkipVerifyFlag)
 		if tlsInsecure {
-			sharedlogging.FromContext(cmd.Context()).Infof("Disable certificate checks")
+			logging.FromContext(cmd.Context()).Infof("Disable certificate checks")
 		}
 		credential = credentials.NewTLS(&tls.Config{
 			InsecureSkipVerify: tlsInsecure,

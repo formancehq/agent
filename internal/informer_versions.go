@@ -3,7 +3,7 @@ package internal
 import (
 	"reflect"
 
-	sharedlogging "github.com/formancehq/go-libs/logging"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -22,7 +22,7 @@ func convertUnstructured[T client.Object](v any) T {
 	return t
 }
 
-func VersionsEventHandler(logger sharedlogging.Logger, membershipClient MembershipClient) cache.ResourceEventHandler {
+func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 

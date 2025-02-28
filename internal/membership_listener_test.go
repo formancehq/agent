@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/formancehq/go-libs/logging"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/google/uuid"

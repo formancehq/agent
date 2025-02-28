@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	oidcclient "github.com/zitadel/oidc/v2/pkg/client"
+	oidcclient "github.com/zitadel/oidc/v3/pkg/client"
 	"golang.org/x/oauth2/clientcredentials"
 	"google.golang.org/grpc/metadata"
 )
@@ -28,7 +28,7 @@ func BearerAuthenticator(issuer, clientID, clientSecret string) AuthenticatorFn 
 
 	return func(ctx context.Context) (metadata.MD, error) {
 
-		discovery, err := oidcclient.Discover(issuer, http.DefaultClient)
+		discovery, err := oidcclient.Discover(ctx, issuer, http.DefaultClient)
 		if err != nil {
 			return nil, err
 		}

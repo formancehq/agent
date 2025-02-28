@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/formancehq/go-libs/collectionutils"
-	"github.com/formancehq/go-libs/logging"
+	"github.com/formancehq/go-libs/v2/collectionutils"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/pkg/errors"
 	"go.uber.org/fx"

@@ -3,7 +3,7 @@ package internal
 import (
 	"reflect"
 
-	sharedlogging "github.com/formancehq/go-libs/logging"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"google.golang.org/protobuf/types/known/structpb"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -11,7 +11,7 @@ import (
 )
 
 type StackEventHandler struct {
-	logger sharedlogging.Logger
+	logger logging.Logger
 	client MembershipClient
 }
 
@@ -109,7 +109,7 @@ func (h *StackEventHandler) DeleteFunc(obj interface{}) {
 	logger.Infof("Stack '%s' deleted", stack.GetName())
 }
 
-func NewStackEventHandler(logger sharedlogging.Logger, membershipClient MembershipClient) cache.ResourceEventHandlerFuncs {
+func NewStackEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandlerFuncs {
 	stackEventHandler := &StackEventHandler{
 		logger: logger,
 		client: membershipClient,
