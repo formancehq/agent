@@ -1,6 +1,6 @@
 VERSION 0.8
 
-IMPORT github.com/formancehq/earthly:tags/v0.19.0 AS core
+IMPORT github.com/formancehq/earthly:tags/v0.19.1 AS core
 IMPORT github.com/formancehq/operator:main AS operator
 
 FROM core+base-image
@@ -18,7 +18,7 @@ compile:
     FROM core+builder-image
     COPY (+sources/*) /src
     WORKDIR /src
-    ARG VERSION=latest
+    ARG VERSION=develop
     DO --pass-args core+GO_COMPILE --VERSION=$VERSION
 
 build-image:
@@ -26,7 +26,7 @@ build-image:
     ENTRYPOINT ["/bin/agent"]
     COPY (+compile/main) /bin/agent
     ARG REPOSITORY=ghcr.io
-    ARG tag=latest
+    ARG tag=develop
     DO core+SAVE_IMAGE --COMPONENT=agent --REPOSITORY=${REPOSITORY} --TAG=$tag
 
 lint:

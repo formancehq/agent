@@ -1,5 +1,6 @@
 global:
   monitoring:
+    batch: true
     traces:
       enabled: true
       mode: grpc
