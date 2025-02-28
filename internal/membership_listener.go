@@ -116,9 +116,7 @@ func (c *membershipListener) Start(ctx context.Context) {
 			}
 
 			c.wp.Submit(func() {
-				ctx, cancel := context.WithCancel(ctx)
-				defer cancel()
-				ctx = extractOtelCtxFromOrder(ctx, msg)
+				ctx := extractOtelCtxFromOrder(ctx, msg)
 				ctx, span := tracer.Start(ctx, "NewOrder")
 				defer span.End()
 				logging.FromContext(ctx).
