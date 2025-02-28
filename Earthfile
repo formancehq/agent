@@ -18,7 +18,7 @@ compile:
     FROM core+builder-image
     COPY (+sources/*) /src
     WORKDIR /src
-    ARG VERSION=develop
+    ARG VERSION=latest
     DO --pass-args core+GO_COMPILE --VERSION=$VERSION
 
 build-image:
@@ -26,7 +26,7 @@ build-image:
     ENTRYPOINT ["/bin/agent"]
     COPY (+compile/main) /bin/agent
     ARG REPOSITORY=ghcr.io
-    ARG tag=develop
+    ARG tag=latest
     DO core+SAVE_IMAGE --COMPONENT=agent --REPOSITORY=${REPOSITORY} --TAG=$tag
 
 lint:
