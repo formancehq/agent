@@ -4,10 +4,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"time"
 
+	"github.com/formancehq/go-libs/v2/health"
+	"github.com/formancehq/go-libs/v2/httpserver"
 	"github.com/formancehq/go-libs/v2/licence"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/go-libs/v2/otlp"
@@ -15,8 +19,10 @@ import (
 	"github.com/formancehq/go-libs/v2/service"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
+	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -47,6 +53,7 @@ const (
 	productionFlag                 = "production"
 	outdatedFlag                   = "outdated"
 	resyncPeriodFlag               = "resync-period"
+	bindAddressFlag                = "bind-address"
 )
 
 var rootCmd = &cobra.Command{
@@ -83,6 +90,7 @@ func init() {
 	rootCmd.Flags().Bool(productionFlag, false, "Is a production agent")
 	rootCmd.Flags().Bool(outdatedFlag, false, "Set the region as outdated when connecting")
 	rootCmd.Flags().Duration(resyncPeriodFlag, 5*time.Minute, "Resync period of K8S resources")
+	rootCmd.Flags().String(bindAddressFlag, ":8080", "Bind address for the agent")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
@@ -148,9 +156,36 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 		otlp.FXModuleFromFlags(cmd, otlp.WithServiceVersion(Version)),
 		otlptraces.FXModuleFromFlags(cmd),
 		licence.FXModuleFromFlags(cmd, ServiceName),
+		fx.Provide(newTcpListener(cmd.Flags())),
+		health.Module(),
+		health.ProvideHealthCheck(func() error {
+			return nil
+		}),
+		fx.Invoke(func(lc fx.Lifecycle, logger logging.Logger, listener net.Listener, ctrl *health.HealthController) {
+			finalRouter := mux.NewRouter()
+			finalRouter.
+				Path("/_healthcheck").
+				Methods(http.MethodGet).
+				HandlerFunc(ctrl.Check)
+			finalRouter.PathPrefix("/").Handler(finalRouter)
+
+			lc.Append(httpserver.NewHook(finalRouter, httpserver.WithListener(listener)))
+		}),
 	}
 
 	return service.New(cmd.OutOrStdout(), options...).Run(cmd)
+}
+
+func newTcpListener(flagSet *pflag.FlagSet) func(l logging.Logger) (net.Listener, error) {
+	return func(l logging.Logger) (net.Listener, error) {
+		address, _ := flagSet.GetString(bindAddressFlag)
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			return listener, err
+		}
+
+		return listener, nil
+	}
 }
 
 func createAuthenticator(cmd *cobra.Command) (internal.Authenticator, error) {
