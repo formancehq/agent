@@ -9,6 +9,7 @@ import (
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
+	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
@@ -168,7 +169,7 @@ func retrieveModuleList(ctx context.Context, config *rest.Config) (modules []str
 	return
 }
 
-func runMembershipClient(lc fx.Lifecycle, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
+func runMembershipClient(lc fx.Lifecycle, debug bool, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			modules, eeModules, err := retrieveModuleList(ctx, config)
@@ -176,11 +177,14 @@ func runMembershipClient(lc fx.Lifecycle, membershipClient *membershipClient, lo
 				return err
 			}
 
-			if err := membershipClient.connect(logging.ContextWithLogger(ctx, logger), modules, eeModules); err != nil {
+			client, err := membershipClient.connect(logging.ContextWithLogger(ctx, logger), modules, eeModules)
+			if err != nil {
 				return err
 			}
+			clientWithTrace := grpcclient.NewConnectionWithTrace(client, debug)
+
 			go func() {
-				if err := membershipClient.Start(logging.ContextWithLogger(ctx, logger)); err != nil {
+				if err := membershipClient.Start(logging.ContextWithLogger(ctx, logger), clientWithTrace); err != nil {
 					panic(err)
 				}
 			}()
@@ -199,7 +203,7 @@ func runMembershipListener(lc fx.Lifecycle, client *membershipListener, logger l
 	})
 }
 
-func NewModule(serverAddress string, authenticator Authenticator, clientInfo ClientInfo, resyncPeriod time.Duration, opts ...grpc.DialOption) fx.Option {
+func NewModule(debug bool, serverAddress string, authenticator Authenticator, clientInfo ClientInfo, resyncPeriod time.Duration, opts ...grpc.DialOption) fx.Option {
 	return fx.Options(
 		fx.Supply(clientInfo),
 		fx.Provide(rest.RESTClientFor),
@@ -221,7 +225,9 @@ func NewModule(serverAddress string, authenticator Authenticator, clientInfo Cli
 		fx.Invoke(CreateVersionsInformer),
 		fx.Invoke(CreateStacksInformer),
 		fx.Invoke(CreateModulesInformers),
-		fx.Invoke(runMembershipClient),
+		fx.Invoke(func(lc fx.Lifecycle, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
+			runMembershipClient(lc, debug, membershipClient, logger, config)
+		}),
 		fx.Invoke(runMembershipListener),
 		fx.Invoke(runInformers),
 	)

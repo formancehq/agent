@@ -8,10 +8,9 @@ import (
 
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/stack/components/agent/internal/generated"
+	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -33,10 +32,8 @@ type membershipClient struct {
 	stopChan   chan chan error
 	stopped    chan struct{}
 
-	serverClient generated.ServerClient
-	joinClient   generated.Server_JoinClient
-	joinContext  context.Context
-	joinCancel   func()
+	joinContext context.Context
+	joinCancel  func()
 
 	authenticator Authenticator
 
@@ -68,18 +65,13 @@ func (c *membershipClient) connectMetadata(ctx context.Context, modules []string
 
 func LoggingClientStreamInterceptor(l logging.Logger) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-		span := trace.SpanFromContext(ctx)
-
 		logging.FromContext(ctx).
-			WithField("traceId", span.SpanContext().TraceID()).
-			WithField("spanId", span.SpanContext().SpanID()).
-			WithField("method", method).
 			Infof("Starting stream")
 		return streamer(logging.ContextWithLogger(ctx, l), desc, cc, method, opts...)
 	}
 }
 
-func (c *membershipClient) connect(ctx context.Context, modules []string, eeModules []string) error {
+func (c *membershipClient) connect(ctx context.Context, modules []string, eeModules []string) (generated.Server_JoinClient, error) {
 	logging.FromContext(ctx).WithFields(map[string]any{
 		"id": c.clientInfo.ID,
 	}).Infof("Establish connection to server")
@@ -89,27 +81,25 @@ func (c *membershipClient) connect(ctx context.Context, modules []string, eeModu
 		grpc.WithChainStreamInterceptor(
 			LoggingClientStreamInterceptor(logging.FromContext(ctx)),
 		),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	conn, err := grpc.NewClient(c.address, opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.serverClient = generated.NewServerClient(conn)
+	serverClient := generated.NewServerClient(conn)
 
 	md, err := c.connectMetadata(ctx, modules, eeModules)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	connectContext := metadata.NewOutgoingContext(c.joinContext, md)
-	joinClient, err := c.serverClient.Join(connectContext)
+	joinClient, err := serverClient.Join(connectContext)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	c.joinClient = joinClient
 
-	return nil
+	return joinClient, nil
 }
 
 func (c *membershipClient) Send(message *generated.Message) error {
@@ -121,8 +111,8 @@ func (c *membershipClient) Send(message *generated.Message) error {
 	}
 }
 
-func (c *membershipClient) sendPong(ctx context.Context) {
-	if err := c.joinClient.SendMsg(&generated.Message{
+func (c *membershipClient) sendPong(ctx context.Context, client grpcclient.ConnectionAdapter) {
+	if err := client.Send(ctx, &generated.Message{
 		Message: &generated.Message_Pong{
 			Pong: &generated.Pong{},
 		},
@@ -134,14 +124,14 @@ func (c *membershipClient) sendPong(ctx context.Context) {
 	}
 }
 
-func (c *membershipClient) Start(ctx context.Context) error {
+func (c *membershipClient) Start(ctx context.Context, client grpcclient.ConnectionAdapter) error {
 
 	var (
 		errCh = make(chan error, 1)
 	)
 	go func() {
 		for {
-			msg, err := c.joinClient.Recv()
+			msg, err := client.Recv(ctx)
 			if err != nil {
 				if err == io.EOF {
 					select {
@@ -156,7 +146,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 			}
 
 			if msg.GetPing() != nil {
-				c.sendPong(ctx)
+				c.sendPong(ctx, client)
 				continue
 			}
 
@@ -171,7 +161,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 		for {
 			select {
 			case <-time.After(5 * time.Second):
-				c.sendPong(ctx)
+				c.sendPong(ctx, client)
 			case <-ctx.Done():
 				return
 			}
@@ -184,7 +174,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 			return ctx.Err()
 		case ch := <-c.stopChan:
 			close(c.stopped)
-			if err := c.joinClient.CloseSend(); err != nil {
+			if err := client.CloseSend(ctx); err != nil {
 				ch <- err
 				//nolint:nilerr
 				return nil
@@ -193,7 +183,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 
 			// Drain messages
 			for {
-				_, err := c.joinClient.Recv()
+				_, err := client.Recv(ctx)
 				if err != nil {
 					break
 				}
@@ -202,7 +192,7 @@ func (c *membershipClient) Start(ctx context.Context) error {
 			ch <- nil
 			return nil
 		case msg := <-c.messages:
-			if err := c.joinClient.SendMsg(msg); err != nil {
+			if err := client.Send(ctx, msg); err != nil {
 				panic(err)
 			}
 			<-time.After(50 * time.Millisecond)

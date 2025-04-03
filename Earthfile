@@ -10,7 +10,7 @@ sources:
     COPY (operator+sources/*) /src
     WORKDIR /src
     COPY go.* .
-    COPY --dir cmd internal tests .
+    COPY --dir cmd internal pkg tests .
     COPY main.go .
     SAVE ARTIFACT /src
 
