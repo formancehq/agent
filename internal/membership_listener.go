@@ -11,8 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
+	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -84,28 +84,6 @@ type membershipListener struct {
 	wp         *pond.WorkerPool
 }
 
-// This need to match membership
-const (
-	otelCtx = "_otelCtx"
-)
-
-func extractOtelCtxFromOrder(ctx context.Context, order *generated.Order) context.Context {
-	if header, ok := order.Metadata[otelCtx]; !ok || ok && header == "" {
-		logging.FromContext(ctx).Errorf("otel context not found")
-		return ctx
-	}
-
-	carrier := propagation.MapCarrier{}
-	if err := json.Unmarshal([]byte(order.Metadata[otelCtx]), &carrier); err == nil {
-		ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
-		logging.FromContext(ctx).Debug("otel context extracted")
-		return ctx
-	}
-
-	logging.FromContext(ctx).Error("cannot extract otel context")
-	return ctx
-}
-
 func (c *membershipListener) Start(ctx context.Context) {
 	defer c.wp.StopAndWait()
 	for {
@@ -116,25 +94,48 @@ func (c *membershipListener) Start(ctx context.Context) {
 			}
 
 			c.wp.Submit(func() {
-				ctx := extractOtelCtxFromOrder(ctx, msg)
+				ctx = grpcclient.ExtractOtelCtxFromMessage(ctx, msg)
+
 				ctx, span := tracer.Start(ctx, "NewOrder")
 				defer span.End()
-				logging.FromContext(ctx).
+
+				logger := logging.FromContext(ctx).
 					WithField("traceId", span.SpanContext().TraceID()).
-					WithField("spanId", span.SpanContext().SpanID()).
-					Infof("Got message from membership: %T", msg.GetMessage())
+					WithField("spanId", span.SpanContext().SpanID())
+				logger.Infof("Got message from membership: %T", msg.GetMessage())
+
 				switch msg := msg.Message.(type) {
 				case *generated.Order_ExistingStack:
+					logger = logger.WithField("stack", msg.ExistingStack.ClusterName)
+					ctx = logging.ContextWithLogger(ctx, logger)
+
 					span.SetName("SyncExistingStack")
+					span.SetAttributes(attribute.String("stack", msg.ExistingStack.ClusterName))
+
 					c.syncExistingStack(ctx, msg.ExistingStack)
 				case *generated.Order_DeletedStack:
+					logger = logger.WithField("stack", msg.DeletedStack.ClusterName)
+					ctx = logging.ContextWithLogger(ctx, logger)
+
 					span.SetName("DeleteStack")
+					span.SetAttributes(attribute.String("stack", msg.DeletedStack.ClusterName))
+
 					c.deleteStack(ctx, msg.DeletedStack)
 				case *generated.Order_DisabledStack:
+					logger = logger.WithField("stack", msg.DisabledStack.ClusterName)
+					ctx = logging.ContextWithLogger(ctx, logger)
+
 					span.SetName("DisableStack")
+					span.SetAttributes(attribute.String("stack", msg.DisabledStack.ClusterName))
+
 					c.disableStack(ctx, msg.DisabledStack)
 				case *generated.Order_EnabledStack:
+					logger = logger.WithField("stack", msg.EnabledStack.ClusterName)
+					ctx = logging.ContextWithLogger(ctx, logger)
+
 					span.SetName("EnableStack")
+					span.SetAttributes(attribute.String("stack", msg.EnabledStack.ClusterName))
+
 					c.enableStack(ctx, msg.EnabledStack)
 				}
 			})

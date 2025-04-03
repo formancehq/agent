@@ -138,7 +138,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	options := []fx.Option{
 		fx.Supply(restConfig),
 		fx.NopLogger,
-		internal.NewModule(serverAddress, authenticator, internal.ClientInfo{
+		internal.NewModule(service.IsDebug(cmd), serverAddress, authenticator, internal.ClientInfo{
 			ID:         agentID,
 			BaseUrl:    baseUrl,
 			Production: isProduction,
