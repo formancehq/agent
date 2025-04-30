@@ -60,6 +60,7 @@
               mockgen
               gomarkdoc
               just
+              wget
               nodejs_22
               goperf
               protobuf
