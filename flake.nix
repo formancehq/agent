@@ -60,13 +60,10 @@
               mockgen
               gomarkdoc
               just
-              wget
               nodejs_22
-              goperf
               protobuf
               protoc-gen-go
               protoc-gen-go-grpc
-              openapi-generator-cli
             ];
           };
         }
