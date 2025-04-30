@@ -25,7 +25,7 @@ var (
 )
 
 //go:generate rm -rf ./dist/operator
-//go:generate git clone --depth 1 --branch main git@github.com:formancehq/operator.git ./dist/operator
+//go:generate git clone --depth 1 --branch main https://github.com/formancehq/operator.git ./dist/operator
 var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(5 * time.Second)
 
