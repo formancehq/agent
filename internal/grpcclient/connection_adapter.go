@@ -14,14 +14,14 @@ import (
 
 var tracer = otel.Tracer("cmd.formance.grpc")
 
-//go:generate mockgen -source=connection_adapter.go -destination=connection_generated.go -package grpcserver . Connection
+//go:generate mockgen -source=connection_adapter.go -destination=connection_generated.go -package grpcclient . Connection
 type Connection interface {
 	CloseSend() error
 	Send(*generated.Message) error
 	Recv() (*generated.Order, error)
 }
 
-//go:generate mockgen -source=connection_adapter.go -destination=connection_generated.go -package grpcserver . ConnectionAdapter
+//go:generate mockgen -source=connection_adapter.go -destination=connection_generated.go -package grpcclient . ConnectionAdapter
 type ConnectionAdapter interface {
 	CloseSend(context.Context) error
 

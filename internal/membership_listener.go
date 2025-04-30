@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//go:generate mockgen -source=/src/ee/agent/internal/membership_listener.go -destination=/src/ee/agent/internal/membership_client_generated.go -package=internal . MembershipClient
+//go:generate mockgen -source=membership_listener.go -destination=membership_client_generated.go -package=internal . MembershipClient
 type MembershipClient interface {
 	Orders() chan *generated.Order
 	Send(message *generated.Message) error
