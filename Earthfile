@@ -109,7 +109,7 @@ deploy:
     END
     FROM --pass-args core+vcluster-deployer-image
 
-    ARG branch=agent-2.4.1
+    ARG branch=main
     COPY --dir (github.com/formancehq/helm/charts/agent:$branch+validate/*) helm/
     COPY .earthly .earthly
     ARG --required user
