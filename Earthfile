@@ -1,6 +1,7 @@
 VERSION 0.8
 
-IMPORT github.com/formancehq/earthly:tags/v0.19.1 AS core
+ARG core=github.com/formancehq/earthly:tags/v0.19.1
+IMPORT $core AS core
 IMPORT github.com/formancehq/operator:main AS operator
 
 FROM core+base-image
@@ -80,6 +81,7 @@ tests:
     COPY internal internal
     ARG GOPROXY
     ARG focus
+    ENV DEBUG=true
     
     RUN --mount=type=cache,id=gomod,target=$GOPATH/pkg/mod \
         --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
@@ -113,15 +115,27 @@ deploy:
     COPY --dir (github.com/formancehq/helm/charts/agent:$branch+validate/*) helm/
     COPY .earthly .earthly
     ARG --required user
-    RUN --secret tld helm upgrade --namespace formance-system \
+    ARG --required REPOSITORY
+    LET ADDITIONAL_ARGS=""
+    ARG FORMANCE_DEV_CLUSTER_V2=no
+    IF [ "$FORMANCE_DEV_CLUSTER_V2" == "yes" ]
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set imagePullSecrets[0].name=zot"
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set server.address=membership.formance.svc.cluster.local:8082"
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set server.tls.enabled=false"
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set global.monitoring.traces.endpoint=otel-shared-admin.default.svc.cluster.local"
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set global.monitoring.metrics.endpoint=otel-shared-admin.default.svc.cluster.local"
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set image.repository=$REPOSITORY/formancehq/agent"
+    ELSE
+        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set server.address=$user.$tld:443"
+    END
+    RUN --secret tld helm upgrade --namespace formance \
         --create-namespace \
         --install \
         --wait \
         -f .earthly/values.yaml \
         --set image.tag=$tag \
         --set agent.baseUrl=https://$user.$tld \
-        --set server.address=$user.$tld:443 \
-        formance-membership-agent ./helm
+        formance-membership-agent ./helm $ADDITIONAL_ARGS
 
 pre-commit:
     WAIT
