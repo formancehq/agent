@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//go:generate mockgen -source=/src/ee/agent/internal/membership_listener.go -destination=/src/ee/agent/internal/membership_client_generated.go -package=internal . MembershipClient
+//go:generate mockgen -source=membership_listener.go -destination=membership_client_generated.go -package=internal . MembershipClient
 type MembershipClient interface {
 	Orders() chan *generated.Order
 	Send(message *generated.Message) error
@@ -272,18 +272,23 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 		parts := strings.Split(stack.GetName(), "-")
 		logger.Debug("Stargate is enabled")
 
+		spec := map[string]any{
+			"organizationID": parts[0],
+			"stackID":        parts[1],
+			"serverURL":      membershipStack.StargateConfig.Url,
+			"auth": map[string]any{
+				"issuer":       membershipStack.AuthConfig.Issuer,
+				"clientID":     membershipStack.AuthConfig.ClientId,
+				"clientSecret": membershipStack.AuthConfig.ClientSecret,
+			},
+		}
+		if membershipStack.StargateConfig.DisableTLS {
+			spec["disableTLS"] = true
+		}
+
 		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, v1beta1.GroupVersion.WithKind("Stargate"), map[string]any{
 			"metadata": metadata,
-			"spec": map[string]any{
-				"organizationID": parts[0],
-				"stackID":        parts[1],
-				"serverURL":      membershipStack.StargateConfig.Url,
-				"auth": map[string]any{
-					"issuer":       membershipStack.AuthConfig.Issuer,
-					"clientID":     membershipStack.AuthConfig.ClientId,
-					"clientSecret": membershipStack.AuthConfig.ClientSecret,
-				},
-			},
+			"spec":     spec,
 		}); err != nil {
 			logger.Errorf("Unable to create module Stargate cluster side: %s", err)
 		}
