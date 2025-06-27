@@ -105,6 +105,7 @@ message StatusChanged {
 message StargateConfig {
   bool enabled = 1;
   string url = 2;
+  bool disableTLS = 3;
 }
 
 message DeletedStack {
