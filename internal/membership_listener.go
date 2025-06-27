@@ -283,7 +283,9 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 			},
 		}
 		if membershipStack.StargateConfig.DisableTLS {
-			spec["disableTLS"] = true
+			spec["tls"] = map[string]any{
+				"disable": true,
+			}
 		}
 
 		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, v1beta1.GroupVersion.WithKind("Stargate"), map[string]any{
