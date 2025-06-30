@@ -24,6 +24,8 @@ var (
 	mapper     meta.RESTMapper
 )
 
+//go:generate rm -rf ./dist/operator
+//go:generate git clone --depth 1 --branch main https://github.com/formancehq/operator.git ./dist/operator
 var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(5 * time.Second)
 
@@ -35,10 +37,9 @@ var _ = BeforeSuite(func() {
 
 	Expect(v1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 
-	//TODO: change this and download the CRDs from a repository target
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "..", "..", "operator",
+			filepath.Join(filepath.Dir(filename), "dist","operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
