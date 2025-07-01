@@ -272,25 +272,24 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 		parts := strings.Split(stack.GetName(), "-")
 		logger.Debug("Stargate is enabled")
 
-		spec := map[string]any{
-			"organizationID": parts[0],
-			"stackID":        parts[1],
-			"serverURL":      membershipStack.StargateConfig.Url,
-			"auth": map[string]any{
-				"issuer":       membershipStack.AuthConfig.Issuer,
-				"clientID":     membershipStack.AuthConfig.ClientId,
-				"clientSecret": membershipStack.AuthConfig.ClientSecret,
-			},
-		}
+		tlsSpec := map[string]any{}
 		if membershipStack.StargateConfig.DisableTLS {
-			spec["tls"] = map[string]any{
-				"disable": true,
-			}
+			tlsSpec["disable"] = true
 		}
 
 		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, v1beta1.GroupVersion.WithKind("Stargate"), map[string]any{
 			"metadata": metadata,
-			"spec":     spec,
+			"spec": map[string]any{
+				"organizationID": parts[0],
+				"stackID":        parts[1],
+				"serverURL":      membershipStack.StargateConfig.Url,
+				"auth": map[string]any{
+					"issuer":       membershipStack.AuthConfig.Issuer,
+					"clientID":     membershipStack.AuthConfig.ClientId,
+					"clientSecret": membershipStack.AuthConfig.ClientSecret,
+				},
+				"tls": tlsSpec,
+			},
 		}); err != nil {
 			logger.Errorf("Unable to create module Stargate cluster side: %s", err)
 		}
