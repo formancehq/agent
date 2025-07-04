@@ -125,7 +125,7 @@ deploy:
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set global.monitoring.metrics.endpoint=otel-shared-admin.default.svc.cluster.local"
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set image.repository=$REPOSITORY/formancehq/agent"
     END
-    RUN --secret tld helm upgrade --namespace formance \
+    RUN --secret tld helm upgrade --namespace formance-system \
         --create-namespace \
         --install \
         --wait \
