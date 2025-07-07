@@ -120,7 +120,6 @@ deploy:
     ARG FORMANCE_DEV_CLUSTER_V2=no
     IF [ "$FORMANCE_DEV_CLUSTER_V2" == "yes" ]
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set imagePullSecrets[0].name=zot"
-        SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set server.tls.enabled=false"
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set global.monitoring.traces.endpoint=otel-shared-admin.default.svc.cluster.local"
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set global.monitoring.metrics.endpoint=otel-shared-admin.default.svc.cluster.local"
         SET ADDITIONAL_ARGS="$ADDITIONAL_ARGS --set image.repository=$REPOSITORY/formancehq/agent"
@@ -131,6 +130,7 @@ deploy:
         --wait \
         -f .earthly/values.yaml \
         --set image.tag=$tag \
+        --set server.tls.enabled=false \
         --set agent.baseUrl=https://$user.$tld \
         --set server.address=membership.formance.svc.cluster.local:8082 \
         formance-membership-agent ./helm $ADDITIONAL_ARGS
