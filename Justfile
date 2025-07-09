@@ -18,21 +18,19 @@ tidy:
   wait
 
 lint:
-  #!/bin/bash
-  set -euo pipefail
-  golangci-lint run --fix --build-tags it --timeout 5m &
-  cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m &
-  wait
+  @golangci-lint run --fix --build-tags it --timeout 5m 
+  @cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m 
 
-tests-unit: lint
-  go test ./internal/...
 
-tests-integration: lint
-  #!/bin/bash
-  set -euo pipefail
+setup-kube:
   ENVTEST_VERSION=1.28.0
   export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use $ENVTEST_VERSION -p path)
-  ginkgo -p ./tests/... 
+
+tests-unit: lint setup-kube
+  @go test ./internal/...
+
+tests-integration: lint setup-kube
+  @ginkgo -p ./tests/... 
 
 release-local:
   @goreleaser release --nightly --skip=publish --clean
