@@ -51,6 +51,25 @@ jobs:
 
 
   Tests:
+    runs-on: "shipfox-2vcpu-ubuntu-2404"
+    needs:
+      - TestsUnit
+      - TestsIntegration
+    steps:
+      - name: Download a report artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@v5.1.2
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: unit_filtered.txt,integration_filtered.txt
+  
+  TestsUnit:
+    name: Tests (Unit)
     runs-on: shipfox-4vcpu-ubuntu-2404
     steps:
     - uses: "actions/checkout@v4"
@@ -61,14 +80,35 @@ jobs:
       with:
         token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
     - name: Pre-commit
-      run: nix develop --impure --command just tests-all
-
+      run: nix develop --impure --command just tests-unit
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-unit-report
+        path: ./coverage/unit_filtered.txt
+  
+  TestsIntegration:
+    name: Tests (Integration)
+    runs-on: shipfox-4vcpu-ubuntu-2404
+    steps:
+    - uses: "actions/checkout@v4"
+      with:
+        fetch-depth: 0
+    - name: Setup Nix
+      uses: ./.github/actions/default
+      with:
+        token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
+    - name: Pre-commit
+      run: nix develop --impure --command just tests-integration
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-integration-report
+        path: ./coverage/integration_filtered.txt
 
   GoReleaser:
     runs-on: "shipfox-4vcpu-ubuntu-2404"
     if: contains(github.event.pull_request.labels.*.name, 'build-images') || github.ref == 'refs/heads/main' || github.event_name == 'merge_group'
-    needs:
-      - Dirty
     steps:
       - uses: "actions/checkout@v4"
         with:
@@ -96,6 +136,7 @@ jobs:
     environment: staging
     needs:
       - GoReleaser
+      - Dirty
       - Tests
     steps:
       - uses: earthly/actions-setup@v1

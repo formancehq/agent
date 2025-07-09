@@ -32,8 +32,6 @@ type testConfig struct {
 	client     *rest.RESTClient
 }
 
-//go:generate rm -rf ./dist/operator
-//go:generate git clone --depth 1 --branch main https://github.com/formancehq/operator.git ./dist/operator
 func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	_, filename, _, _ := osRuntime.Caller(0)
 	apiServer := envtest.APIServer{}
@@ -43,7 +41,7 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	require.NoError(t, v1beta1.AddToScheme(scheme.Scheme))
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "dist", "operator",
+			filepath.Join(filepath.Dir(filename), "..", "dist", "operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
