@@ -4,10 +4,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"time"
 
+	"github.com/formancehq/go-libs/v2/httpclient"
 	"github.com/formancehq/go-libs/v2/licence"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/go-libs/v2/otlp"
@@ -22,6 +24,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/transport"
 	"k8s.io/client-go/util/homedir"
 )
 
@@ -129,6 +132,17 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	restConfig, err := internal.NewK8SConfig(kubeConfig)
 	if err != nil {
 		return err
+	}
+
+	debug, _ := cmd.Flags().GetBool(service.DebugFlag)
+	if debug {
+		restConfig.Wrap(transport.Wrappers(
+			transport.WrapperFunc(
+				func(rt http.RoundTripper) http.RoundTripper {
+					return httpclient.NewDebugHTTPTransport(rt)
+				},
+			)),
+		)
 	}
 
 	isProduction, _ := cmd.Flags().GetBool(productionFlag)
