@@ -30,7 +30,7 @@ var _ = Describe("Informer modules", func() {
 
 	BeforeEach(func() {
 		membershipClientMock = internal.NewMembershipClientMock()
-		restMapper, err = internal.CreateRestMapper(restConfig)
+		restMapper, err = internal.CreateRestMapper(restConfig, logging.Testing())
 		Expect(err).ToNot(HaveOccurred())
 	})
 	When("a module is created on the cluster", func() {

@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/collectionutils"
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/formancehq/stack/components/agent/internal/generated"
@@ -26,13 +27,17 @@ var _ = Describe("Membership listener", func() {
 	var (
 		membershipClient *internal.MembershipClientMock
 		clientInfo       internal.ClientInfo
+		ctx              = logging.TestingContext()
 	)
 	BeforeEach(func() {
 		membershipClient = internal.NewMembershipClientMock()
 		clientInfo = internal.ClientInfo{
 			BaseUrl: &url.URL{},
 		}
-		listener := internal.NewMembershipListener(internal.NewDefaultK8SClient(k8sClient), clientInfo, mapper, membershipClient)
+
+		modules, _, err := internal.RetrieveModuleList(ctx, restConfig)
+		Expect(err).To(BeNil())
+		listener := internal.NewMembershipListener(internal.NewDefaultK8SClient(k8sClient), clientInfo, mapper, membershipClient, modules)
 		done := make(chan struct{})
 		DeferCleanup(func() {
 			<-done

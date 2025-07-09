@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -152,13 +153,22 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	options := []fx.Option{
 		fx.Supply(restConfig),
 		fx.NopLogger,
-		internal.NewModule(service.IsDebug(cmd), serverAddress, authenticator, internal.ClientInfo{
-			ID:         agentID,
-			BaseUrl:    baseUrl,
-			Production: isProduction,
-			Outdated:   outdated,
-			Version:    Version,
-		}, resyncPeriod, dialOptions...),
+		fx.Provide(func(l logging.Logger) context.Context {
+			return logging.ContextWithLogger(cmd.Context(), l)
+		}),
+		internal.NewModule(
+			service.IsDebug(cmd),
+			serverAddress,
+			authenticator,
+			internal.ClientInfo{
+				ID:         agentID,
+				BaseUrl:    baseUrl,
+				Production: isProduction,
+				Outdated:   outdated,
+				Version:    Version,
+			}, resyncPeriod,
+			dialOptions...,
+		),
 		otlp.FXModuleFromFlags(cmd, otlp.WithServiceVersion(Version)),
 		otlptraces.FXModuleFromFlags(cmd),
 		licence.FXModuleFromFlags(cmd, ServiceName),

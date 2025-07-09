@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
@@ -81,6 +82,7 @@ type membershipListener struct {
 
 	restMapper meta.RESTMapper
 	orders     MembershipClient
+	modules    modules
 	wp         *pond.WorkerPool
 }
 
@@ -191,7 +193,7 @@ func (c *membershipListener) generateMetadata(membershipStack *generated.Stack) 
 
 }
 func (c *membershipListener) syncModules(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
-	modules := collectionutils.Map(membershipStack.Modules, func(module *generated.Module) string {
+	expectedModules := collectionutils.Map(membershipStack.Modules, func(module *generated.Module) string {
 		return strings.ToLower(module.Name)
 	})
 	logger := logging.FromContext(ctx).WithField("stack", membershipStack.ClusterName)
@@ -205,19 +207,27 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 		if gvk.Kind == "Stargate" {
 			continue
 		}
-		resources, err := c.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			logger.Errorf("Unable to get resources for %s: %s", gvk.Kind, err)
+
+		crd := collectionutils.First(c.modules, func(item v1.CustomResourceDefinition) bool {
+			if item.Spec.Group == gvk.Group && gvk.Kind == item.Spec.Names.Kind {
+				for _, version := range item.Spec.Versions {
+					if version.Name == gvk.Version {
+						return true
+					}
+				}
+			}
+
+			return false
+		})
+		if crd.Name == "" {
+			logging.Errorf("Unable to find CRD for %s, skipping module sync", gvk.Kind)
 			continue
 		}
-		singular, err := c.restMapper.ResourceSingularizer(resources.Resource.Resource)
-		if err != nil {
-			logger.Errorf("Unable to get singular for %s: %s", gvk.Kind, err)
-			continue
-		}
-		logger.Debugf("Resource: checking module resource %s, singular: %s", resources.Resource.Resource, singular)
-		if !slices.Contains(modules, singular) {
-			if err := c.deleteModule(ctx, logger, resources.Resource.Resource, stack.GetName()); err != nil {
+		singular := crd.Status.AcceptedNames.Singular
+		plural := crd.Status.AcceptedNames.Plural
+		logger.Debugf("Resource: checking module plural %s, singular: %s, group: %s", plural, singular, gvk.Group)
+		if !slices.Contains(expectedModules, singular) {
+			if err := c.deleteModule(ctx, logger, plural, stack.GetName()); err != nil {
 				logger.Errorf("Unable to get and delete module %s cluster side: %s", gvk.Kind, err)
 			}
 			continue
@@ -455,14 +465,20 @@ func (c *membershipListener) createOrUpdateStackDependency(
 		}, content)
 }
 
-func NewMembershipListener(client K8SClient, clientInfo ClientInfo, mapper meta.RESTMapper,
-	orders MembershipClient) *membershipListener {
+func NewMembershipListener(
+	client K8SClient,
+	clientInfo ClientInfo,
+	mapper meta.RESTMapper,
+	orders MembershipClient,
+	modules modules,
+) *membershipListener {
 	return &membershipListener{
 		client:     client,
 		clientInfo: clientInfo,
 		restMapper: mapper,
 		orders:     orders,
 		wp:         pond.New(5, 5),
+		modules:    modules,
 	}
 }
 
