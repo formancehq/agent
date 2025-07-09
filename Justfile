@@ -1,5 +1,7 @@
 set dotenv-load
 
+ENVTEST_VERSION:="1.28.0"
+
 default:
   @just --list
 
@@ -22,15 +24,17 @@ lint:
   @cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m 
 
 
-setup-kube:
-  ENVTEST_VERSION=1.28.0
-  export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use $ENVTEST_VERSION -p path)
+tests-unit: lint generate
+  #!/bin/bash
+  set -euo pipefail
+  export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
+  go test ./internal/...
 
-tests-unit: lint setup-kube
-  @go test ./internal/...
-
-tests-integration: lint setup-kube
-  @ginkgo -p ./tests/... 
+tests-integration: lint generate
+  #!/bin/bash
+  set -euo pipefail
+  export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
+  ginkgo -p ./tests/... 
 
 release-local:
   @goreleaser release --nightly --skip=publish --clean
