@@ -4,7 +4,7 @@ default:
   @just --list
 
 pc: pre-commit
-pre-commit: generate tidy lint
+pre-commit: tidy generate lint
 tests-all: tests-unit tests-integration
 
 generate:
@@ -17,7 +17,7 @@ tidy:
   cd ./tests && go mod tidy &
   wait
 
-lint: tidy generate
+lint:
   #!/bin/bash
   set -euo pipefail
   golangci-lint run --fix --build-tags it --timeout 5m &
