@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"time"
 
+	"github.com/formancehq/go-libs/v2/httpclient"
 	"github.com/formancehq/go-libs/v2/licence"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/go-libs/v2/otlp"
@@ -22,6 +25,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/transport"
 	"k8s.io/client-go/util/homedir"
 )
 
@@ -131,6 +135,17 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	debug, _ := cmd.Flags().GetBool(service.DebugFlag)
+	if debug {
+		restConfig.Wrap(transport.Wrappers(
+			transport.WrapperFunc(
+				func(rt http.RoundTripper) http.RoundTripper {
+					return httpclient.NewDebugHTTPTransport(rt)
+				},
+			)),
+		)
+	}
+
 	isProduction, _ := cmd.Flags().GetBool(productionFlag)
 	resyncPeriod, _ := cmd.Flags().GetDuration(resyncPeriodFlag)
 	outdated, _ := cmd.Flags().GetBool(outdatedFlag)
@@ -138,13 +153,22 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	options := []fx.Option{
 		fx.Supply(restConfig),
 		fx.NopLogger,
-		internal.NewModule(service.IsDebug(cmd), serverAddress, authenticator, internal.ClientInfo{
-			ID:         agentID,
-			BaseUrl:    baseUrl,
-			Production: isProduction,
-			Outdated:   outdated,
-			Version:    Version,
-		}, resyncPeriod, dialOptions...),
+		fx.Provide(func(l logging.Logger) context.Context {
+			return logging.ContextWithLogger(cmd.Context(), l)
+		}),
+		internal.NewModule(
+			service.IsDebug(cmd),
+			serverAddress,
+			authenticator,
+			internal.ClientInfo{
+				ID:         agentID,
+				BaseUrl:    baseUrl,
+				Production: isProduction,
+				Outdated:   outdated,
+				Version:    Version,
+			}, resyncPeriod,
+			dialOptions...,
+		),
 		otlp.FXModuleFromFlags(cmd, otlp.WithServiceVersion(Version)),
 		otlptraces.FXModuleFromFlags(cmd),
 		licence.FXModuleFromFlags(cmd, ServiceName),

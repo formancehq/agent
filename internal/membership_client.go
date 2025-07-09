@@ -28,6 +28,9 @@ const (
 )
 
 type membershipClient struct {
+	modules   []string
+	eeModules []string
+
 	clientInfo ClientInfo
 	stopChan   chan chan error
 	stopped    chan struct{}
@@ -45,7 +48,7 @@ type membershipClient struct {
 	messages chan *generated.Message
 }
 
-func (c *membershipClient) connectMetadata(ctx context.Context, modules []string, eeModules []string) (metadata.MD, error) {
+func (c *membershipClient) connectMetadata(ctx context.Context) (metadata.MD, error) {
 
 	md, err := c.authenticator.authenticate(ctx)
 	if err != nil {
@@ -58,8 +61,8 @@ func (c *membershipClient) connectMetadata(ctx context.Context, modules []string
 	md.Append(metadataOutdated, strconv.FormatBool(c.clientInfo.Outdated))
 	md.Append(metadataVersion, c.clientInfo.Version)
 	md.Append(metadataCapabilities, capabilityEE, capabilityModuleList)
-	md.Append(capabilityModuleList, modules...)
-	md.Append(capabilityEE, eeModules...)
+	md.Append(capabilityModuleList, c.modules...)
+	md.Append(capabilityEE, c.eeModules...)
 	return md, nil
 }
 
@@ -71,7 +74,7 @@ func LoggingClientStreamInterceptor(l logging.Logger) grpc.StreamClientIntercept
 	}
 }
 
-func (c *membershipClient) connect(ctx context.Context, modules []string, eeModules []string) (generated.Server_JoinClient, error) {
+func (c *membershipClient) connect(ctx context.Context) (generated.Server_JoinClient, error) {
 	logging.FromContext(ctx).WithFields(map[string]any{
 		"id": c.clientInfo.ID,
 	}).Infof("Establish connection to server")
@@ -89,7 +92,7 @@ func (c *membershipClient) connect(ctx context.Context, modules []string, eeModu
 
 	serverClient := generated.NewServerClient(conn)
 
-	md, err := c.connectMetadata(ctx, modules, eeModules)
+	md, err := c.connectMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +225,14 @@ func (c *membershipClient) Orders() chan *generated.Order {
 	return c.orders
 }
 
-func NewMembershipClient(authenticator Authenticator, clientInfo ClientInfo, address string, opts ...grpc.DialOption) *membershipClient {
+func NewMembershipClient(
+	authenticator Authenticator,
+	clientInfo ClientInfo,
+	address string,
+	modules modules,
+	eeModules eeModules,
+	opts ...grpc.DialOption,
+) *membershipClient {
 	return &membershipClient{
 		stopChan:      make(chan chan error),
 		authenticator: authenticator,
@@ -232,5 +242,7 @@ func NewMembershipClient(authenticator Authenticator, clientInfo ClientInfo, add
 		orders:        make(chan *generated.Order),
 		messages:      make(chan *generated.Message),
 		stopped:       make(chan struct{}),
+		modules:       modules.Singular(),
+		eeModules:     eeModules.Singular(),
 	}
 }

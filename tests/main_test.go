@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/stack/components/agent/internal"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,7 +62,7 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = rest.RESTClientFor(restConfig)
 	Expect(err).NotTo(HaveOccurred())
 
-	mapper, err = internal.CreateRestMapper(restConfig)
+	mapper, err = internal.CreateRestMapper(restConfig, logging.Testing())
 	Expect(err).NotTo(HaveOccurred())
 
 })

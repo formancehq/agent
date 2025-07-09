@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	v1apis "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
@@ -41,7 +43,7 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	require.NoError(t, v1beta1.AddToScheme(scheme.Scheme))
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "dist","operator",
+			filepath.Join(filepath.Dir(filename), "dist", "operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
@@ -62,7 +64,7 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	k8sClient, err := rest.RESTClientFor(restConfig)
 	require.NoError(t, err)
 
-	mapper, err := CreateRestMapper(restConfig)
+	mapper, err := CreateRestMapper(restConfig, logging.Testing())
 	require.NoError(t, err)
 
 	t.Cleanup(
@@ -119,7 +121,7 @@ func TestDeleteModule(t *testing.T) {
 				require.NoError(t, testConfig.client.Post().Resource(resources.Resource.Resource).Body(&recon).Do(ctx).Error())
 				orders := NewMembershipClientMock()
 
-				membershipListener := NewMembershipListener(NewDefaultK8SClient(testConfig.client), ClientInfo{}, testConfig.mapper, orders)
+				membershipListener := NewMembershipListener(NewDefaultK8SClient(testConfig.client), ClientInfo{}, testConfig.mapper, orders, []v1apis.CustomResourceDefinition{})
 
 				if tc.withLabels {
 					require.NoError(t, membershipListener.deleteModule(ctx, logging.Testing(), resources.Resource.Resource, stackName))
@@ -137,7 +139,7 @@ func TestDeleteModule(t *testing.T) {
 func TestRetrieveModuleList(t *testing.T) {
 	t.Parallel()
 	test(t, func(ctx context.Context, testConfig *testConfig) {
-		modules, eeModules, err := retrieveModuleList(ctx, testConfig.restConfig)
+		modules, eeModules, err := RetrieveModuleList(ctx, testConfig.restConfig)
 		require.NoError(t, err)
 		require.NotEmpty(t, modules)
 		require.NotEmpty(t, eeModules)
@@ -176,7 +178,7 @@ func TestSyncAuthClients(t *testing.T) {
 	}
 	test(t, func(ctx context.Context, tc *testConfig) {
 		t.Parallel()
-		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock())
+		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
 
 		stackName := uuid.NewString() + "-" + rand(4)
 		stackuid := uuid.NewString()
@@ -233,7 +235,7 @@ func TestSyncStargate(t *testing.T) {
 		t.Run(fmt.Sprintf("%s enabled=%t", t.Name(), tcase.enabled), func(t *testing.T) {
 			test(t, func(ctx context.Context, tc *testConfig) {
 				t.Parallel()
-				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock())
+				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
 
 				stackName := uuid.NewString() + "-" + rand(4)
 				stackuid := uuid.NewString()
