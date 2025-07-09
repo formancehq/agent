@@ -7,7 +7,7 @@ default:
 
 pc: pre-commit
 pre-commit: tidy generate lint
-tests-all: tests-unit tests-integration
+tests: tests-unit tests-integration
 
 generate:
   @go generate ./...
@@ -24,17 +24,23 @@ lint:
   @cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m 
 
 
+# TODO(fix): test using `-race`
 tests-unit: lint generate
   #!/bin/bash
   set -euo pipefail
+  mkdir -p ./coverage
   export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
-  go test ./internal/...
+  go test -coverprofile=coverage/unit.txt -covermode=atomic ./internal/...
+  cat ./coverage/unit.txt | grep -Ev "generated|pkg|web|tests/unit|with_trace|noop" > ./coverage/unit_filtered.txt
 
+# TODO(fix): test using `--race`
 tests-integration: lint generate
   #!/bin/bash
   set -euo pipefail
+  mkdir -p ./coverage
   export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
-  ginkgo -p ./tests/... 
+  ginkgo -r -p --output-interceptor-mode=none --output-dir=coverage --covermode atomic --cover --coverprofile=integration.txt --timeout "10m" --coverpkg=./internal/... ./tests
+  cat ./coverage/integration.txt | grep -Ev "generated|pkg|web|tests/integration|with_trace|noop" > ./coverage/integration_filtered.txt
 
 release-local:
   @goreleaser release --nightly --skip=publish --clean

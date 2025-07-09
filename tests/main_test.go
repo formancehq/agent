@@ -25,8 +25,6 @@ var (
 	mapper     meta.RESTMapper
 )
 
-//go:generate rm -rf ./dist/operator
-//go:generate git clone --depth 1 --branch main https://github.com/formancehq/operator.git ./dist/operator
 var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(5 * time.Second)
 
@@ -40,7 +38,7 @@ var _ = BeforeSuite(func() {
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join(filepath.Dir(filename), "dist","operator",
+			filepath.Join(filepath.Dir(filename), "..", "dist", "operator",
 				"config", "crd", "bases"),
 		},
 		ErrorIfCRDPathMissing: true,
