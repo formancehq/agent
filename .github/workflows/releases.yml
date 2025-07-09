@@ -7,34 +7,23 @@ permissions:
   contents: write
 
 jobs:
-  GoReleaser:
-    runs-on: "shipfox-4vcpu-ubuntu-2404"
+  Release:
+    name: Release
+    runs-on: shipfox-4vcpu-ubuntu-2404
     steps:
-      - uses: 'actions/checkout@v4'
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup Env
-        uses: ./.github/actions/env
+      - name: Setup Nix
+        uses: ./.github/actions/default
         with:
           token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: "NumaryBot"
-          password: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-      - run: >
-          earthly
-          --no-output
-          --allow-privileged
-          --secret SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY
-          --secret GITHUB_TOKEN=$GITHUB_TOKEN
-          --secret FURY_TOKEN=$FURY_TOKEN
-          --secret GORELEASER_KEY=$GORELEASER_KEY
-          ${{ contains(github.event.pull_request.labels.*.name, 'no-cache') && '--no-cache' || '' }}
-          +release --mode=release
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Release
+        run: nix develop --impure --command just release
         env:
           GITHUB_TOKEN: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
-          FURY_TOKEN: ${{ secrets.FURY_TOKEN }}
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}

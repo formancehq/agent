@@ -25,23 +25,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   Dirty:
-    runs-on: "shipfox-4vcpu-ubuntu-2404"
+    runs-on: shipfox-4vcpu-ubuntu-2404
     steps:
-      - uses: 'actions/checkout@v4'
+      - uses: "actions/checkout@v4"
         with:
           fetch-depth: 0
-      - name: Setup Env
-        uses: ./.github/actions/env
+      - name: Setup Nix
+        uses: ./.github/actions/default
         with:
           token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-      - run: >
-          earthly
-          --allow-privileged
-          --secret SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY
-          ${{ contains(github.event.pull_request.labels.*.name, 'no-cache') && '--no-cache' || '' }}
-          +pre-commit
+      - name: Pre-commit
         env:
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.NUMARY_GITHUB_TOKEN }}
+        run: nix develop --impure --command just pc
       - name: Get changed files
         id: changed-files
         shell: bash
@@ -53,27 +49,20 @@ jobs:
             exit 1
           fi
 
+
   Tests:
-    runs-on: "shipfox-8vcpu-ubuntu-2404"
-    needs:
-      - Dirty
+    runs-on: shipfox-4vcpu-ubuntu-2404
     steps:
-      - uses: 'actions/checkout@v4'
-        with:
-          fetch-depth: 0
-      - name: Setup Env
-        uses: ./.github/actions/env
-        with:
-          token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-      - run: >
-          earthly
-          --no-output
-          --allow-privileged
-          --secret SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY
-          ${{ contains(github.event.pull_request.labels.*.name, 'no-cache') && '--no-cache' || '' }}
-          +tests
-        env:
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+    - uses: "actions/checkout@v4"
+      with:
+        fetch-depth: 0
+    - name: Setup Nix
+      uses: ./.github/actions/default
+      with:
+        token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
+    - name: Pre-commit
+      run: nix develop --impure --command just tests-all
+
 
   GoReleaser:
     runs-on: "shipfox-4vcpu-ubuntu-2404"
@@ -81,15 +70,11 @@ jobs:
     needs:
       - Dirty
     steps:
-      - uses: earthly/actions-setup@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "latest"
-      - uses: 'actions/checkout@v4'
+      - uses: "actions/checkout@v4"
         with:
           fetch-depth: 0
-      - name: Setup Env
-        uses: ./.github/actions/env
+      - name: Setup Nix
+        uses: ./.github/actions/default
         with:
           token: ${{ secrets.NUMARY_GITHUB_TOKEN }}
       - name: Login to GitHub Container Registry
@@ -99,21 +84,12 @@ jobs:
           username: "NumaryBot"
           password: ${{ secrets.NUMARY_GITHUB_TOKEN }}
       - run: >
-          earthly
-          --no-output
-          --allow-privileged
-          --secret SPEAKEASY_API_KEY=$SPEAKEASY_API_KEY
-          --secret GITHUB_TOKEN=$GITHUB_TOKEN
-          --secret FURY_TOKEN=$FURY_TOKEN
-          --secret GORELEASER_KEY=$GORELEASER_KEY
-          ${{ contains(github.event.pull_request.labels.*.name, 'no-cache') && '--no-cache' || '' }}
-          +release --mode=ci
+          nix develop --impure --command just release-ci
+
         env:
           GITHUB_TOKEN: ${{ secrets.NUMARY_GITHUB_TOKEN }}
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
-          FURY_TOKEN: ${{ secrets.FURY_TOKEN }}
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-
+  
   Deploy:
     runs-on: "shipfox-2vcpu-ubuntu-2404"
     if: github.ref == 'refs/heads/main'
