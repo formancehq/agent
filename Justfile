@@ -42,6 +42,12 @@ tests-integration: lint generate
   ginkgo -r -p --output-interceptor-mode=none --output-dir=coverage --covermode atomic --cover --coverprofile=integration.txt --timeout "10m" --coverpkg=./internal/... ./tests
   cat ./coverage/integration.txt | grep -Ev "generated|pkg|web|tests/integration|with_trace|noop" > ./coverage/integration_filtered.txt
 
+generate-agent-proto:
+  @rm -rf ./internal/generated
+  @mkdir -p ./internal/generated
+  @protoc --go_out=./internal/generated --go_opt=paths=source_relative --go-grpc_out=./internal/generated --go-grpc_opt=paths=source_relative ./agent.proto
+
+
 release-local:
   @goreleaser release --nightly --skip=publish --clean
 
