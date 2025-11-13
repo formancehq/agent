@@ -62,7 +62,6 @@ message Stack {
   bool disabled = 6;
   reserved 7;
   string versions = 8;
-  bool enableAudit = 9;
   map<string, string> additionalLabels = 10;
   map<string, string> additionalAnnotations = 11;
   repeated Module modules = 12;
