@@ -133,11 +133,13 @@ message AuthClient {
 message AddedVersion {
   string name = 1;
   map<string, string> versions = 2;
+  bool deprecated = 3;
 }
 
 message UpdatedVersion {
   string name = 1;
   map<string, string> versions = 2;
+  bool deprecated = 3;
 }
 
 message DeletedVersion {

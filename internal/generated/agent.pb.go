@@ -1290,6 +1290,7 @@ type AddedVersion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Versions      map[string]string      `protobuf:"bytes,2,rep,name=versions,proto3" json:"versions,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Deprecated    bool                   `protobuf:"varint,3,opt,name=deprecated,proto3" json:"deprecated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1338,10 +1339,18 @@ func (x *AddedVersion) GetVersions() map[string]string {
 	return nil
 }
 
+func (x *AddedVersion) GetDeprecated() bool {
+	if x != nil {
+		return x.Deprecated
+	}
+	return false
+}
+
 type UpdatedVersion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Versions      map[string]string      `protobuf:"bytes,2,rep,name=versions,proto3" json:"versions,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Deprecated    bool                   `protobuf:"varint,3,opt,name=deprecated,proto3" json:"deprecated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1388,6 +1397,13 @@ func (x *UpdatedVersion) GetVersions() map[string]string {
 		return x.Versions
 	}
 	return nil
+}
+
+func (x *UpdatedVersion) GetDeprecated() bool {
+	if x != nil {
+		return x.Deprecated
+	}
+	return false
 }
 
 type DeletedVersion struct {
@@ -1535,16 +1551,22 @@ const file_agent_proto_rawDesc = "" +
 	"\n" +
 	"AuthClient\x12\x16\n" +
 	"\x06public\x18\x01 \x01(\bR\x06public\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"\x9f\x01\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"\xbf\x01\n" +
 	"\fAddedVersion\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12>\n" +
-	"\bversions\x18\x02 \x03(\v2\".server.AddedVersion.VersionsEntryR\bversions\x1a;\n" +
+	"\bversions\x18\x02 \x03(\v2\".server.AddedVersion.VersionsEntryR\bversions\x12\x1e\n" +
+	"\n" +
+	"deprecated\x18\x03 \x01(\bR\n" +
+	"deprecated\x1a;\n" +
 	"\rVersionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa3\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc3\x01\n" +
 	"\x0eUpdatedVersion\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12@\n" +
-	"\bversions\x18\x02 \x03(\v2$.server.UpdatedVersion.VersionsEntryR\bversions\x1a;\n" +
+	"\bversions\x18\x02 \x03(\v2$.server.UpdatedVersion.VersionsEntryR\bversions\x12\x1e\n" +
+	"\n" +
+	"deprecated\x18\x03 \x01(\bR\n" +
+	"deprecated\x1a;\n" +
 	"\rVersionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"$\n" +
