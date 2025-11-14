@@ -114,24 +114,27 @@ func (c *membershipClient) Send(message *generated.Message) error {
 	}
 }
 
-func (c *membershipClient) sendPong(ctx context.Context, client grpcclient.ConnectionAdapter) {
+func (c *membershipClient) sendPong(ctx context.Context, client grpcclient.ConnectionAdapter) error {
 	if err := client.Send(ctx, &generated.Message{
 		Message: &generated.Message_Pong{
 			Pong: &generated.Pong{},
 		},
 	}); err != nil {
 		logging.FromContext(ctx).Errorf("Unable to send pong to server: %s", err)
-		if errors.Is(err, io.EOF) {
-			panic(err)
-		}
+		return err
 	}
+	return nil
 }
 
 func (c *membershipClient) Start(ctx context.Context, client grpcclient.ConnectionAdapter) error {
 
 	var (
-		errCh = make(chan error, 1)
+		errCh      = make(chan error, 1)
+		pongErrCh  = make(chan error, 1)
+		stopPinger = make(chan struct{})
 	)
+
+	// Goroutine to receive messages
 	go func() {
 		for {
 			msg, err := client.Recv(ctx)
@@ -149,7 +152,13 @@ func (c *membershipClient) Start(ctx context.Context, client grpcclient.Connecti
 			}
 
 			if msg.GetPing() != nil {
-				c.sendPong(ctx, client)
+				if err := c.sendPong(ctx, client); err != nil {
+					// Send error but continue - will be handled by main loop
+					select {
+					case pongErrCh <- err:
+					default:
+					}
+				}
 				continue
 			}
 
@@ -160,11 +169,24 @@ func (c *membershipClient) Start(ctx context.Context, client grpcclient.Connecti
 			}
 		}
 	}()
+
+	// Goroutine to send periodic pongs
 	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
-			case <-time.After(5 * time.Second):
-				c.sendPong(ctx, client)
+			case <-ticker.C:
+				if err := c.sendPong(ctx, client); err != nil {
+					// Send error but continue - will be handled by main loop
+					select {
+					case pongErrCh <- err:
+					default:
+					}
+				}
+			case <-stopPinger:
+				return
 			case <-ctx.Done():
 				return
 			}
@@ -174,8 +196,10 @@ func (c *membershipClient) Start(ctx context.Context, client grpcclient.Connecti
 	for {
 		select {
 		case <-ctx.Done():
+			close(stopPinger)
 			return ctx.Err()
 		case ch := <-c.stopChan:
+			close(stopPinger)
 			close(c.stopped)
 			if err := client.CloseSend(ctx); err != nil {
 				ch <- err
@@ -196,11 +220,18 @@ func (c *membershipClient) Start(ctx context.Context, client grpcclient.Connecti
 			return nil
 		case msg := <-c.messages:
 			if err := client.Send(ctx, msg); err != nil {
-				panic(err)
+				logging.FromContext(ctx).Errorf("Failed to send message: %s", err)
+				return err
 			}
 			<-time.After(50 * time.Millisecond)
+		case err := <-pongErrCh:
+			// Pong failed, connection is likely broken
+			logging.FromContext(ctx).Errorf("Failed to send pong, connection broken: %s", err)
+			close(stopPinger)
+			return err
 		case err := <-errCh:
 			logging.FromContext(ctx).Errorf("Stream closed with error: %s", err)
+			close(stopPinger)
 			return err
 		}
 	}

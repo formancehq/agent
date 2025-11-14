@@ -208,15 +208,84 @@ func RetrieveModuleList(ctx context.Context, config *rest.Config) (modules, eeMo
 func runMembershipClient(lc fx.Lifecycle, debug bool, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			client, err := membershipClient.connect(logging.ContextWithLogger(ctx, logger))
-			if err != nil {
-				return err
-			}
-			clientWithTrace := grpcclient.NewConnectionWithTrace(client, debug)
+			// Create a background context for the client that won't be cancelled when startup completes
+			clientCtx := logging.ContextWithLogger(context.Background(), logger)
 
 			go func() {
-				if err := membershipClient.Start(logging.ContextWithLogger(ctx, logger), clientWithTrace); err != nil {
-					panic(err)
+				const (
+					maxRetries     = 10
+					baseDelay      = 1 * time.Second
+					maxDelay       = 2 * time.Minute
+					backoffFactor  = 2.0
+				)
+
+				retries := 0
+				for {
+					select {
+					case <-clientCtx.Done():
+						return
+					default:
+					}
+
+					client, err := membershipClient.connect(clientCtx)
+					if err != nil {
+						logger.Errorf("Failed to connect to membership server: %s", err)
+
+						retries++
+						if retries >= maxRetries {
+							logger.Errorf("Max retries (%d) reached, giving up", maxRetries)
+							panic(errors.New("failed to connect to membership server after max retries"))
+						}
+
+						// Calculate exponential backoff delay
+						delay := time.Duration(float64(baseDelay) * float64(retries) * backoffFactor)
+						if delay > maxDelay {
+							delay = maxDelay
+						}
+
+						logger.Infof("Retrying connection in %s (attempt %d/%d)", delay, retries, maxRetries)
+						time.Sleep(delay)
+						continue
+					}
+
+					// Connection successful, reset retry counter
+					if retries > 0 {
+						logger.Infof("Successfully reconnected after %d attempts", retries)
+						retries = 0
+					}
+
+					clientWithTrace := grpcclient.NewConnectionWithTrace(client, debug)
+
+					if err := membershipClient.Start(clientCtx, clientWithTrace); err != nil {
+						logger.Errorf("Membership client stopped with error: %s", err)
+
+						// Check if it's a clean shutdown
+						if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+							logger.Info("Membership client shutdown requested")
+							return
+						}
+
+						// Connection lost, attempt to reconnect
+						logger.Info("Connection lost, attempting to reconnect...")
+						retries++
+						if retries >= maxRetries {
+							logger.Errorf("Max retries (%d) reached after connection loss, giving up", maxRetries)
+							panic(errors.New("failed to reconnect to membership server after max retries"))
+						}
+
+						// Calculate exponential backoff delay
+						delay := time.Duration(float64(baseDelay) * float64(retries) * backoffFactor)
+						if delay > maxDelay {
+							delay = maxDelay
+						}
+
+						logger.Infof("Reconnecting in %s (attempt %d/%d)", delay, retries, maxRetries)
+						time.Sleep(delay)
+						continue
+					}
+
+					// Clean exit
+					return
 				}
 			}()
 			return nil
