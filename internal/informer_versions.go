@@ -32,8 +32,9 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			if err := membershipClient.Send(&generated.Message{
 				Message: &generated.Message_AddedVersion{
 					AddedVersion: &generated.AddedVersion{
-						Name:     version.Name,
-						Versions: version.Spec,
+						Name:       version.Name,
+						Versions:   version.Spec,
+						Deprecated: version.Annotations["formance.com/deprecated"] == "true",
 					},
 				},
 			}); err != nil {
@@ -53,8 +54,9 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			if err := membershipClient.Send(&generated.Message{
 				Message: &generated.Message_UpdatedVersion{
 					UpdatedVersion: &generated.UpdatedVersion{
-						Name:     newVersions.Name,
-						Versions: newVersions.Spec,
+						Name:       newVersions.Name,
+						Versions:   newVersions.Spec,
+						Deprecated: newVersions.Annotations["formance.com/deprecated"] == "true",
 					},
 				},
 			}); err != nil {
