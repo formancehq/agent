@@ -284,3 +284,22 @@ func TestSyncStargate(t *testing.T) {
 	}
 
 }
+
+func TestDeleteStackNotExisting(t *testing.T) {
+	test(t, func(ctx context.Context, tc *testConfig) {
+		t.Parallel()
+		mock := NewMembershipClientMock()
+		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, mock, []v1apis.CustomResourceDefinition{})
+		listener.deleteStack(ctx, &generated.DeletedStack{
+			ClusterName: "non-existing-stack",
+		})
+
+		messages := mock.GetMessages()
+		require.Len(t, messages, 1)
+
+		message, ok := messages[0].Message.(*generated.Message_StackDeleted)
+		require.True(t, ok)
+
+		require.Equal(t, "non-existing-stack", message.StackDeleted.ClusterName)
+	})
+}

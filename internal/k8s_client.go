@@ -22,6 +22,7 @@ type K8SClient interface {
 	Get(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error)
 	Create(ctx context.Context, resource string, o *unstructured.Unstructured) error
 	Patch(ctx context.Context, resource, name string, body []byte) error
+	Delete(ctx context.Context, resource, name string) error
 	EnsureNotExists(ctx context.Context, resource, name string) error
 	EnsureNotExistsBySelector(ctx context.Context, resource string, selector labels.Selector) error
 	List(ctx context.Context, resource string, selector labels.Selector) ([]unstructured.Unstructured, error)
@@ -61,13 +62,17 @@ func (c defaultK8SClient) Patch(ctx context.Context, resource, name string, body
 		Error()
 }
 
+func (c defaultK8SClient) Delete(ctx context.Context, resource, name string) error {
+	return c.restClient.Delete().
+		Resource(resource).
+		Name(name).
+		Do(ctx).
+		Error()
+}
+
 func (c defaultK8SClient) EnsureNotExists(ctx context.Context, resource, name string) error {
 	return client.IgnoreNotFound(
-		c.restClient.Delete().
-			Resource(resource).
-			Name(name).
-			Do(ctx).
-			Error(),
+		c.Delete(ctx, resource, name),
 	)
 }
 
