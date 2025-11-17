@@ -80,17 +80,17 @@ type membershipListener struct {
 	clientInfo ClientInfo
 	client     K8SClient
 
-	restMapper meta.RESTMapper
-	orders     MembershipClient
-	modules    modules
-	wp         *pond.WorkerPool
+	restMapper       meta.RESTMapper
+	membershipClient MembershipClient
+	modules          modules
+	wp               *pond.WorkerPool
 }
 
 func (c *membershipListener) Start(ctx context.Context) {
 	defer c.wp.StopAndWait()
 	for {
 		select {
-		case msg, ok := <-c.orders.Orders():
+		case msg, ok := <-c.membershipClient.Orders():
 			if !ok {
 				return
 			}
@@ -352,11 +352,27 @@ func (c *membershipListener) syncAuthClients(ctx context.Context, metadata map[s
 }
 
 func (c *membershipListener) deleteStack(ctx context.Context, stack *generated.DeletedStack) {
-	if err := c.client.EnsureNotExists(ctx, "Stacks", stack.ClusterName); err != nil {
-		logging.FromContext(ctx).Errorf("Deleting cluster side: %s", err)
+	logger := logging.FromContext(ctx).WithField("func", "Delete").WithField("stack", stack.ClusterName)
+	if err := c.client.Delete(ctx, "Stacks", stack.ClusterName); err != nil {
+		if apierrors.IsNotFound(err) {
+			if err := c.membershipClient.Send(&generated.Message{
+				Message: &generated.Message_StackDeleted{
+					StackDeleted: &generated.DeletedStack{
+						ClusterName: stack.ClusterName,
+					},
+				},
+			}); err != nil {
+				logger.Errorf("Unable to send stack delete to server: %s", err)
+				return
+			}
+			return
+		}
+
+		logger.Errorf("Deleting cluster side: %s", err)
 		return
 	}
-	logging.FromContext(ctx).Infof("Stack %s deleted", stack.ClusterName)
+
+	logger.Infof("Stack %s deleted", stack.ClusterName)
 }
 
 func (c *membershipListener) disableStack(ctx context.Context, stack *generated.DisabledStack) {
@@ -468,16 +484,16 @@ func NewMembershipListener(
 	client K8SClient,
 	clientInfo ClientInfo,
 	mapper meta.RESTMapper,
-	orders MembershipClient,
+	membershipClient MembershipClient,
 	modules modules,
 ) *membershipListener {
 	return &membershipListener{
-		client:     client,
-		clientInfo: clientInfo,
-		restMapper: mapper,
-		orders:     orders,
-		wp:         pond.New(5, 5),
-		modules:    modules,
+		client:           client,
+		clientInfo:       clientInfo,
+		restMapper:       mapper,
+		membershipClient: membershipClient,
+		wp:               pond.New(5, 5),
+		modules:          modules,
 	}
 }
 
