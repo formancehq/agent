@@ -198,6 +198,7 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 	logger := logging.FromContext(ctx).WithField("stack", membershipStack.ClusterName)
 	logger.Infof("Syncing modules for stack %s", membershipStack.Modules)
 	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
+		logger.Infof("Checking module %s", gvk.Kind)
 		object := reflect.New(rtype).Interface()
 		if _, ok := object.(v1beta1.Module); !ok {
 			logger.Debugf("Skipping module sync for %s", gvk.Kind)
