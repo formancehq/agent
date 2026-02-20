@@ -200,6 +200,7 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
 		object := reflect.New(rtype).Interface()
 		if _, ok := object.(v1beta1.Module); !ok {
+			logger.Debugf("Skipping module sync for %s", gvk.Kind)
 			continue
 		}
 
