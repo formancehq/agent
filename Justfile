@@ -1,6 +1,6 @@
 set dotenv-load
 
-ENVTEST_VERSION:="1.28.0"
+ENVTEST_VERSION:="1.33.0"
 
 default:
   @just --list
@@ -12,7 +12,7 @@ tests: tests-unit tests-integration
 generate:
   @go generate ./...
 
-tidy: 
+tidy:
   #!/bin/bash
   set -euo pipefail
   go mod tidy &
@@ -20,8 +20,8 @@ tidy:
   wait
 
 lint:
-  @golangci-lint run --fix --build-tags it --timeout 5m 
-  @cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m 
+  @golangci-lint run --fix --build-tags it --timeout 5m
+  @cd ./tests && golangci-lint run --fix --build-tags it --timeout 5m
 
 
 # TODO(fix): test using `-race`
@@ -29,7 +29,7 @@ tests-unit: lint generate
   #!/bin/bash
   set -euo pipefail
   mkdir -p ./coverage
-  export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
+  export KUBEBUILDER_ASSETS=$(setup-envtest use {{ ENVTEST_VERSION }} -p path)
   go test -coverprofile=coverage/unit.txt -covermode=atomic ./internal/...
   cat ./coverage/unit.txt | grep -Ev "generated|pkg|web|tests/unit|with_trace|noop" > ./coverage/unit_filtered.txt
 
@@ -38,7 +38,7 @@ tests-integration: lint generate
   #!/bin/bash
   set -euo pipefail
   mkdir -p ./coverage
-  export KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240320141353-395cfc7486e6 use {{ ENVTEST_VERSION }} -p path)
+  export KUBEBUILDER_ASSETS=$(setup-envtest use {{ ENVTEST_VERSION }} -p path)
   ginkgo -r -p --output-interceptor-mode=none --output-dir=coverage --covermode atomic --cover --coverprofile=integration.txt --timeout "10m" --coverpkg=./internal/... ./tests
   cat ./coverage/integration.txt | grep -Ev "generated|pkg|web|tests/integration|with_trace|noop" > ./coverage/integration_filtered.txt
 
