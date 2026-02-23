@@ -68,8 +68,9 @@ func NewMembershipClientMock() *MembershipClientMock {
 }
 
 type ClientInfo struct {
-	ID      string
-	BaseUrl *url.URL
+	ID                 string
+	BaseUrl            *url.URL
+	AdditionalBaseURLs []string
 
 	Outdated   bool
 	Production bool

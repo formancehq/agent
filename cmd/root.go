@@ -48,6 +48,7 @@ const (
 	authenticationIssuerFlag       = "authentication-issuer"
 	authenticationClientSecretFlag = "authentication-client-secret"
 	baseUrlFlag                    = "base-url"
+	additionalBaseUrlsFlag         = "additional-base-urls"
 	productionFlag                 = "production"
 	outdatedFlag                   = "outdated"
 	resyncPeriodFlag               = "resync-period"
@@ -84,6 +85,7 @@ func init() {
 	rootCmd.Flags().String(authenticationClientSecretFlag, "", "")
 	rootCmd.Flags().String(authenticationIssuerFlag, "", "")
 	rootCmd.Flags().String(baseUrlFlag, "", "")
+	rootCmd.Flags().StringSlice(additionalBaseUrlsFlag, nil, "Additional base URLs for the region")
 	rootCmd.Flags().Bool(productionFlag, false, "Is a production agent")
 	rootCmd.Flags().Bool(outdatedFlag, false, "Set the region as outdated when connecting")
 	rootCmd.Flags().Duration(resyncPeriodFlag, 5*time.Minute, "Resync period of K8S resources")
@@ -149,6 +151,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	isProduction, _ := cmd.Flags().GetBool(productionFlag)
 	resyncPeriod, _ := cmd.Flags().GetDuration(resyncPeriodFlag)
 	outdated, _ := cmd.Flags().GetBool(outdatedFlag)
+	additionalBaseUrls, _ := cmd.Flags().GetStringSlice(additionalBaseUrlsFlag)
 
 	options := []fx.Option{
 		fx.Supply(restConfig),
@@ -161,11 +164,12 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 			serverAddress,
 			authenticator,
 			internal.ClientInfo{
-				ID:         agentID,
-				BaseUrl:    baseUrl,
-				Production: isProduction,
-				Outdated:   outdated,
-				Version:    Version,
+				ID:                 agentID,
+				BaseUrl:            baseUrl,
+				AdditionalBaseURLs: additionalBaseUrls,
+				Production:         isProduction,
+				Outdated:           outdated,
+				Version:            Version,
 			}, resyncPeriod,
 			dialOptions...,
 		),

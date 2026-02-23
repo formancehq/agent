@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	metadataID           = "id"
-	metadataBaseUrl      = "baseUrl"
-	metadataProduction   = "production"
-	metadataOutdated     = "outdated"
-	metadataVersion      = "version"
-	metadataCapabilities = "capabilities"
+	metadataID                 = "id"
+	metadataBaseUrl            = "baseUrl"
+	metadataAdditionalBaseUrls = "additionalBaseUrls"
+	metadataProduction         = "production"
+	metadataOutdated           = "outdated"
+	metadataVersion            = "version"
+	metadataCapabilities       = "capabilities"
 
 	capabilityEE         = "EE"
 	capabilityModuleList = "MODULE_LIST"
@@ -57,6 +58,7 @@ func (c *membershipClient) connectMetadata(ctx context.Context) (metadata.MD, er
 
 	md.Append(metadataID, c.clientInfo.ID)
 	md.Append(metadataBaseUrl, c.clientInfo.BaseUrl.String())
+	md.Append(metadataAdditionalBaseUrls, c.clientInfo.AdditionalBaseURLs...)
 	md.Append(metadataProduction, strconv.FormatBool(c.clientInfo.Production))
 	md.Append(metadataOutdated, strconv.FormatBool(c.clientInfo.Outdated))
 	md.Append(metadataVersion, c.clientInfo.Version)
