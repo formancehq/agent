@@ -131,7 +131,7 @@ jobs:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
   
   Deploy:
-    runs-on: "shipfox-2vcpu-ubuntu-2404"
+    runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main'
     environment: staging
     needs:
@@ -147,19 +147,24 @@ jobs:
         with:
           fetch-depth: 0
       - name: Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          oauth-client-id: ${{ secrets.TS_OIDC_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_OIDC_AUDIENCE }}
+          tags: ${{ vars.TS_TAGS }}
+          version: ${{ vars.TS_VERSION }}
+          args: ${{ vars.TS_ARGS }}
+          retry: ${{ vars.TS_RETRY }}
+          timeout: ${{ vars.TS_TIMEOUT }}
+          ping: ${{ vars.TS_PING }}
       - name: "Deploy in staging"
         env:
           TAG: ${{ github.sha }}
           COMPONENT: agent
           ARGOCD_REGION_AUTH_TOKEN: ${{ secrets.ARGOCD_REGION_AUTH_TOKEN }}
         run: >
-          earthly  
-          --no-output 
+          earthly
+          --no-output
           --secret AUTH_TOKEN=$ARGOCD_REGION_AUTH_TOKEN
           +deploy-staging
           --TAG=$TAG
