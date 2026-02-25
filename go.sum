@@ -30,8 +30,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/formancehq/go-libs/v2 v2.2.3 h1:7irBJ4NfSkJdVKxXPktqVAoQa7hJcejmrXgjdgh27Zk=
 github.com/formancehq/go-libs/v2 v2.2.3/go.mod h1:JvBjEDWNf7izCy2dq/eI3aMc9d28gChBe1rjw5yYlAs=
-github.com/formancehq/operator/v3 v3.6.3-0.20260225140300-1da3429836ac h1:5lz+MSvFSS1nTxwZ9xLimXqvk0dSbO0S1N+fY2dPpIQ=
-github.com/formancehq/operator/v3 v3.6.3-0.20260225140300-1da3429836ac/go.mod h1:XAFUnT/D+TaY7PzrtyB6VLtl7SKGBKWho3rSJHzkUJc=
+github.com/formancehq/operator/v3 v3.7.0 h1:AnO3DRxs2cmSRwL69Pb923OGtgXVYAecHtR9sEzTL9w=
+github.com/formancehq/operator/v3 v3.7.0/go.mod h1:XAFUnT/D+TaY7PzrtyB6VLtl7SKGBKWho3rSJHzkUJc=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=
