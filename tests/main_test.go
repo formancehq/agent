@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 
-	"github.com/formancehq/operator/api/formance.com/v1beta1"
+	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"

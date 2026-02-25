@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/api/formance.com/v1beta1"
+	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/formancehq/operator/api/formance.com/v1beta1"
+	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
