@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/api/formance.com/v1beta1"
+	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
