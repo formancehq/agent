@@ -64,7 +64,7 @@ jobs:
           pattern: coverage-*
           merge-multiple: true
       - name: Upload coverage reports to Codecov with GitHub Action
-        uses: codecov/codecov-action@v5.5.3
+        uses: codecov/codecov-action@v6.0.0
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
