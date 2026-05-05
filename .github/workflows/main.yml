@@ -18,7 +18,7 @@ jobs:
   PR:
     if: github.event_name == 'pull_request'
     name: Check PR Title
-    runs-on: shipfox-2vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-amd64-2vcpu
     permissions:
       statuses: write
     steps:
@@ -27,9 +27,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   Dirty:
-    runs-on: shipfox-4vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-      - uses: "actions/checkout@v6"
+      - uses: "namespacelabs/nscloud-checkout-action@v7"
         with:
           fetch-depth: 0
       - name: Setup Nix
@@ -53,7 +53,7 @@ jobs:
 
 
   Tests:
-    runs-on: "shipfox-2vcpu-ubuntu-2404"
+    runs-on: "namespace-profile-linux-amd64-2vcpu"
     needs:
       - TestsUnit
       - TestsIntegration
@@ -72,9 +72,9 @@ jobs:
   
   TestsUnit:
     name: Tests (Unit)
-    runs-on: shipfox-4vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-    - uses: "actions/checkout@v6"
+    - uses: "namespacelabs/nscloud-checkout-action@v7"
       with:
         fetch-depth: 0
     - name: Setup Nix
@@ -91,9 +91,9 @@ jobs:
   
   TestsIntegration:
     name: Tests (Integration)
-    runs-on: shipfox-4vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-    - uses: "actions/checkout@v6"
+    - uses: "namespacelabs/nscloud-checkout-action@v7"
       with:
         fetch-depth: 0
     - name: Setup Nix
@@ -109,10 +109,10 @@ jobs:
         path: ./coverage/integration_filtered.txt
 
   GoReleaser:
-    runs-on: "shipfox-4vcpu-ubuntu-2404"
+    runs-on: "namespace-profile-linux-amd64-4vcpu"
     if: contains(github.event.pull_request.labels.*.name, 'build-images') || github.ref == 'refs/heads/main' || github.event_name == 'merge_group'
     steps:
-      - uses: "actions/checkout@v6"
+      - uses: "namespacelabs/nscloud-checkout-action@v7"
         with:
           fetch-depth: 0
       - name: Setup Nix
@@ -145,7 +145,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: "latest"
-      - uses: 'actions/checkout@v6'
+      - uses: 'namespacelabs/nscloud-checkout-action@v7'
         with:
           fetch-depth: 0
       - name: Tailscale
