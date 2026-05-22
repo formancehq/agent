@@ -145,7 +145,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version: "latest"
-      - uses: 'namespacelabs/nscloud-checkout-action@v8'
+      - uses: 'actions/checkout@v6'
         with:
           fetch-depth: 0
       - name: Tailscale
