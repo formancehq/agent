@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/alitto/pond v1.9.2
 	github.com/formancehq/go-libs/v2 v2.2.4
-	github.com/formancehq/operator/v3 v3.8.3
+	github.com/formancehq/operator/v3 v3.10.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -39,6 +39,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/formancehq/go-libs/v5 v5.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
