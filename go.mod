@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/alitto/pond v1.9.2
 	github.com/formancehq/go-libs/v2 v2.2.4
-	github.com/formancehq/operator/v3 v3.9.3-0.20260519223933-7e0efbbd4c75
+	github.com/formancehq/operator/v3 v3.10.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/onsi/ginkgo/v2 v2.28.1

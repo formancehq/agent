@@ -32,8 +32,8 @@ github.com/formancehq/go-libs/v2 v2.2.4 h1:2J44jywumMoiGZMW3O32h80EmmgULBokHBMCw
 github.com/formancehq/go-libs/v2 v2.2.4/go.mod h1:JvBjEDWNf7izCy2dq/eI3aMc9d28gChBe1rjw5yYlAs=
 github.com/formancehq/go-libs/v5 v5.1.0 h1:0TktJG7bg0glZ6drBF42lrFsL2Vzl6MI2hp7P39gw2E=
 github.com/formancehq/go-libs/v5 v5.1.0/go.mod h1:0zJ6yzF4/Pu9lmKpswaEdQChpnxuMFsTxmhTCE1raXk=
-github.com/formancehq/operator/v3 v3.9.3-0.20260519223933-7e0efbbd4c75 h1:HMIYdlNC/Zm+2G5gTy18ddzLlteXl9ULlPeM9iSeFdw=
-github.com/formancehq/operator/v3 v3.9.3-0.20260519223933-7e0efbbd4c75/go.mod h1:ROs7sy86W0FZbbjNTQd/JGcbVQDyp76S21o71x6ZIhw=
+github.com/formancehq/operator/v3 v3.10.0 h1:/uChN6iN0u6GeJ7mPKziIphKUFs+xQzQYosPB5dAv2M=
+github.com/formancehq/operator/v3 v3.10.0/go.mod h1:pT+PlgOrhxDez4EP4HmWt9P+I4mheeh2w+iOwPNbPTQ=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=
