@@ -29,7 +29,7 @@ jobs:
   Dirty:
     runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-      - uses: "namespacelabs/nscloud-checkout-action@v8"
+      - uses: "namespacelabs/nscloud-checkout-action@v9"
         with:
           fetch-depth: 0
       - name: Setup Nix
@@ -74,7 +74,7 @@ jobs:
     name: Tests (Unit)
     runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-    - uses: "namespacelabs/nscloud-checkout-action@v8"
+    - uses: "namespacelabs/nscloud-checkout-action@v9"
       with:
         fetch-depth: 0
     - name: Setup Nix
@@ -93,7 +93,7 @@ jobs:
     name: Tests (Integration)
     runs-on: namespace-profile-linux-amd64-4vcpu
     steps:
-    - uses: "namespacelabs/nscloud-checkout-action@v8"
+    - uses: "namespacelabs/nscloud-checkout-action@v9"
       with:
         fetch-depth: 0
     - name: Setup Nix
@@ -112,7 +112,7 @@ jobs:
     runs-on: "namespace-profile-linux-amd64-4vcpu"
     if: contains(github.event.pull_request.labels.*.name, 'build-images') || github.ref == 'refs/heads/main' || github.event_name == 'merge_group'
     steps:
-      - uses: "namespacelabs/nscloud-checkout-action@v8"
+      - uses: "namespacelabs/nscloud-checkout-action@v9"
         with:
           fetch-depth: 0
       - name: Setup Nix
