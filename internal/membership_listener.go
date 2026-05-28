@@ -6,20 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
-	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
 	"github.com/alitto/pond"
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
@@ -29,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -156,7 +152,7 @@ func (c *membershipListener) syncExistingStack(ctx context.Context, membershipSt
 
 	metadata := c.generateMetadata(membershipStack)
 
-	stack, err := c.createOrUpdate(ctx, v1beta1.GroupVersion.WithKind("Stack"), membershipStack.ClusterName, membershipStack.ClusterName, nil, map[string]any{
+	stack, err := c.createOrUpdate(ctx, formanceGroupVersion.WithKind("Stack"), membershipStack.ClusterName, membershipStack.ClusterName, nil, map[string]any{
 		"metadata": metadata,
 		"spec": map[string]any{
 			"versionsFromFile": versions,
@@ -198,42 +194,33 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 	})
 	logger := logging.FromContext(ctx).WithField("stack", membershipStack.ClusterName)
 	logger.Infof("Syncing modules for stack %s", membershipStack.Modules)
-	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
-		object := reflect.New(rtype).Interface()
-		if _, ok := object.(v1beta1.Module); !ok {
+
+	for _, crd := range c.modules {
+		kind := crd.Spec.Names.Kind
+
+		if kind == "Stargate" {
 			continue
 		}
 
-		if gvk.Kind == "Stargate" {
-			continue
-		}
-
-		crd := collectionutils.First(c.modules, func(item v1.CustomResourceDefinition) bool {
-			if item.Spec.Group == gvk.Group && gvk.Kind == item.Spec.Names.Kind {
-				for _, version := range item.Spec.Versions {
-					if version.Name == gvk.Version {
-						return true
-					}
-				}
-			}
-
-			return false
-		})
-		if crd.Name == "" {
-			logging.Errorf("Unable to find CRD for %s, skipping module sync", gvk.Kind)
-			continue
-		}
 		singular := crd.Status.AcceptedNames.Singular
 		plural := crd.Status.AcceptedNames.Plural
-		logger.Debugf("Resource: checking module plural %s, singular: %s, group: %s", plural, singular, gvk.Group)
+		// Use the first served version from the CRD spec
+		version := crd.Spec.Versions[0].Name
+		gvk := schema.GroupVersionKind{
+			Group:   crd.Spec.Group,
+			Version: version,
+			Kind:    kind,
+		}
+
+		logger.Debugf("Resource: checking module plural %s, singular: %s, group: %s", plural, singular, crd.Spec.Group)
 		if !slices.Contains(expectedModules, singular) {
 			if err := c.deleteModule(ctx, logger, plural, stack.GetName()); err != nil {
-				logger.Errorf("Unable to get and delete module %s cluster side: %s", gvk.Kind, err)
+				logger.Errorf("Unable to get and delete module %s cluster side: %s", kind, err)
 			}
 			continue
 		}
 
-		switch gvk.Kind {
+		switch kind {
 		case "Auth":
 			if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, gvk, map[string]any{
 				"metadata": metadata,
@@ -263,10 +250,9 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 			if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, gvk, map[string]any{
 				"metadata": metadata,
 			}); err != nil {
-				logger.Errorf("Unable to create module %s cluster side: %s", gvk.Kind, err)
+				logger.Errorf("Unable to create module %s cluster side: %s", kind, err)
 			}
 		}
-
 	}
 }
 
@@ -287,7 +273,7 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 			tlsSpec["disable"] = true
 		}
 
-		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, v1beta1.GroupVersion.WithKind("Stargate"), map[string]any{
+		if _, err := c.createOrUpdateStackDependency(ctx, stack.GetName(), stack.GetName(), stack, formanceGroupVersion.WithKind("Stargate"), map[string]any{
 			"metadata": metadata,
 			"spec": map[string]any{
 				"organizationID": parts[0],
@@ -315,7 +301,7 @@ func (c *membershipListener) syncAuthClients(ctx context.Context, metadata map[s
 	expectedAuthClients := make([]*unstructured.Unstructured, 0)
 	for _, client := range staticClients {
 		authClient, err := c.createOrUpdateStackDependency(ctx, fmt.Sprintf("%s-%s", stack.GetName(), client.Id), stack.GetName(),
-			stack, v1beta1.GroupVersion.WithKind("AuthClient"), map[string]any{
+			stack, formanceGroupVersion.WithKind("AuthClient"), map[string]any{
 				"metadata": metadata,
 				"spec": map[string]any{
 					"id":     client.Id,

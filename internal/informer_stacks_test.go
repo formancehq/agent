@@ -5,15 +5,30 @@ import (
 	"testing"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 )
+
+func newUnstructuredStack(name string, ready bool, disabled bool) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "formance.com/v1beta1",
+			"kind":       "Stack",
+			"metadata": map[string]interface{}{
+				"name": name,
+			},
+			"spec": map[string]interface{}{
+				"disabled": disabled,
+			},
+			"status": map[string]interface{}{
+				"ready": ready,
+			},
+		},
+	}
+}
 
 func TestDeleteFunc(t *testing.T) {
 	t.Parallel()
@@ -21,21 +36,18 @@ func TestDeleteFunc(t *testing.T) {
 	membershipClientMock := internal.NewMockMembershipClient(ctrl)
 	resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
 
-	stack := &v1beta1.Stack{
-		ObjectMeta: v1.ObjectMeta{
-			Name: uuid.NewString(),
+	stack := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "formance.com/v1beta1",
+			"kind":       "Stack",
+			"metadata": map[string]interface{}{
+				"name": uuid.NewString(),
+			},
 		},
 	}
 
 	membershipClientMock.EXPECT().Send(gomock.Any())
-	unstructuredStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stack)
-	if err != nil {
-		t.Fatalf("failed to convert stack to unstructured: %v", err)
-	}
-
-	resourceInformer.DeleteFunc(&unstructured.Unstructured{
-		Object: unstructuredStack,
-	})
+	resourceInformer.DeleteFunc(stack)
 
 	require.True(t, ctrl.Satisfied())
 }
@@ -46,23 +58,10 @@ func TestAddStack(t *testing.T) {
 	membershipClientMock := internal.NewMockMembershipClient(ctrl)
 	resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
 
-	stack := &v1beta1.Stack{
-		ObjectMeta: v1.ObjectMeta{
-			Name: uuid.NewString(),
-		},
-		Spec: v1beta1.StackSpec{
-			Disabled: true,
-		},
-	}
+	stack := newUnstructuredStack(uuid.NewString(), false, true)
 
 	membershipClientMock.EXPECT().Send(gomock.Any())
-	unstructuredStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stack)
-	if err != nil {
-		t.Fatalf("failed to convert stack to unstructured: %v", err)
-	}
-	resourceInformer.AddFunc(&unstructured.Unstructured{
-		Object: unstructuredStack,
-	})
+	resourceInformer.AddFunc(stack)
 
 	require.True(t, ctrl.Satisfied())
 }
@@ -104,42 +103,15 @@ func TestUpdateStatus(t *testing.T) {
 			membershipClientMock := internal.NewMockMembershipClient(ctrl)
 			resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
 
-			oldStack := &v1beta1.Stack{
-				ObjectMeta: v1.ObjectMeta{
-					Name: uuid.NewString(),
-				},
-				Spec: v1beta1.StackSpec{
-					Disabled: tc.wasDisabled,
-				},
-				Status: v1beta1.StackStatus{
-					Status: v1beta1.Status{
-						Ready: tc.wasReady,
-					},
-				},
-			}
-
-			newStack := oldStack.DeepCopy()
-			newStack.Status.Ready = tc.isReady
-			newStack.Spec.Disabled = tc.isDisabled
+			name := uuid.NewString()
+			oldStack := newUnstructuredStack(name, tc.wasReady, tc.wasDisabled)
+			newStack := newUnstructuredStack(name, tc.isReady, tc.isDisabled)
 
 			if tc.isReady != tc.wasReady || tc.isDisabled != tc.wasDisabled {
 				membershipClientMock.EXPECT().Send(gomock.Any())
 			}
 
-			unstructuredOldStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(oldStack)
-			if err != nil {
-				t.Fatalf("failed to convert old stack to unstructured: %v", err)
-			}
-
-			unstructuredNewStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(newStack)
-			if err != nil {
-				t.Fatalf("failed to convert new stack to unstructured: %v", err)
-			}
-			resourceInformer.UpdateFunc(&unstructured.Unstructured{
-				Object: unstructuredOldStack,
-			}, &unstructured.Unstructured{
-				Object: unstructuredNewStack,
-			})
+			resourceInformer.UpdateFunc(oldStack, newStack)
 
 			require.True(t, ctrl.Satisfied())
 		})

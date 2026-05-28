@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	gomegaTypes "github.com/onsi/gomega/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type targetStackMatcher struct {
-	stack *v1beta1.Stack
+	stack client.Object
 }
 
 func (s targetStackMatcher) Match(actual interface{}) (success bool, err error) {
@@ -56,7 +55,7 @@ func (s targetStackMatcher) NegatedFailureMessage(actual interface{}) (message s
 
 var _ gomegaTypes.GomegaMatcher = (*targetStackMatcher)(nil)
 
-func TargetStack(stack *v1beta1.Stack) gomegaTypes.GomegaMatcher {
+func TargetStack(stack client.Object) gomegaTypes.GomegaMatcher {
 	return &targetStackMatcher{
 		stack: stack,
 	}

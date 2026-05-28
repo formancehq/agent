@@ -2,13 +2,11 @@ package internal
 
 import (
 	"context"
-	"reflect"
 	"sort"
 	"time"
 
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
 	"go.uber.org/fx"
@@ -57,7 +55,7 @@ func NewK8SConfig(kubeConfigPath string) (*rest.Config, error) {
 		}
 	}
 
-	config.GroupVersion = &v1beta1.GroupVersion
+	config.GroupVersion = &formanceGroupVersion
 	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	config.APIPath = "/apis"
 
@@ -99,26 +97,17 @@ func CreateStacksInformer(factory dynamicinformer.DynamicSharedInformerFactory,
 }
 
 func CreateModulesInformers(factory dynamicinformer.DynamicSharedInformerFactory,
-	restMapper meta.RESTMapper, logger logging.Logger, client MembershipClient) error {
+	modules modules, logger logging.Logger, client MembershipClient) error {
 
-	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
-		object := reflect.New(rtype).Interface()
-		_, ok := object.(v1beta1.Module)
-		if !ok {
-			continue
-		}
+	for _, crd := range modules {
+		resource := crd.Status.AcceptedNames.Plural
 
-		restMapping, err := restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			return err
-		}
-
-		logger = logger.WithFields(map[string]any{
-			"component": restMapping.Resource.Resource,
+		l := logger.WithFields(map[string]any{
+			"component": resource,
 		})
 
-		logger.Info("Creating informer")
-		if err := createInformer(factory, restMapping.Resource.Resource, NewModuleEventHandler(logger, client)); err != nil {
+		l.Info("Creating informer")
+		if err := createInformer(factory, resource, NewModuleEventHandler(l, client)); err != nil {
 			return err
 		}
 	}
@@ -132,7 +121,7 @@ func getApiGroupResources(discoveryClient discovery.DiscoveryInterface, logger l
 	}
 
 	groupResources = collectionutils.Filter(groupResources, func(item *restmapper.APIGroupResources) bool {
-		return item.Group.Name == v1beta1.GroupVersion.Group
+		return item.Group.Name == formanceGroupVersion.Group
 	})
 
 	if len(groupResources) == 0 {
@@ -263,7 +252,9 @@ func NewModule(
 		fx.Provide(NewMembershipListener),
 		fx.Invoke(CreateVersionsInformer),
 		fx.Invoke(CreateStacksInformer),
-		fx.Invoke(CreateModulesInformers),
+		fx.Invoke(func(factory dynamicinformer.DynamicSharedInformerFactory, modules modules, logger logging.Logger, client MembershipClient) error {
+			return CreateModulesInformers(factory, modules, logger, client)
+		}),
 		fx.Invoke(func(lc fx.Lifecycle, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
 			runMembershipClient(lc, debug, membershipClient, logger, config)
 		}),
