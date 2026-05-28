@@ -78,12 +78,7 @@ func main() {
 				"baseUrl":    pulumi.String(baseURL),
 				"production": pulumi.Bool(production),
 				"outdated":   pulumi.Bool(outdated),
-				"authentication": pulumi.Map{
-					"mode":         pulumi.String(authMode),
-					"issuer":       pulumi.String(authIssuer),
-					"clientID":     pulumi.String(agentID),
-					"clientSecret": config.GetSecret(ctx, "authentication-client-secret"),
-				},
+				"authentication": agentAuthValues(ctx, authMode, authIssuer, agentID),
 			},
 			"imagePullSecrets": getImagePullSecrets(cfg),
 			"nodeSelector":     getConfigMap(cfg, "node-selector"),
@@ -125,4 +120,21 @@ func main() {
 
 		return nil
 	})
+}
+
+func agentAuthValues(ctx *pulumi.Context, mode, issuer, agentID string) pulumi.Map {
+	auth := pulumi.Map{
+		"mode": pulumi.String(mode),
+	}
+
+	switch mode {
+	case "token":
+		auth["token"] = config.GetSecret(ctx, "authentication-client-secret")
+	default: // bearer
+		auth["issuer"] = pulumi.String(issuer)
+		auth["clientID"] = pulumi.String(agentID)
+		auth["clientSecret"] = config.GetSecret(ctx, "authentication-client-secret")
+	}
+
+	return auth
 }
