@@ -23,7 +23,7 @@ func main() {
 		dc := newDockerConfig(ctx, cfg)
 
 		// Build agent image
-		agentImage, err := dc.buildImage(ctx, "formancehq/agent", "../..", "../../build.Dockerfile")
+		agentImage, err := dc.buildImage(ctx, "formancehq/agent", "../..", "../../Dockerfile")
 		if err != nil {
 			return fmt.Errorf("failed to build agent image: %w", err)
 		}

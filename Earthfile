@@ -20,9 +20,7 @@ compile:
     DO --pass-args core+GO_COMPILE --VERSION=$VERSION
 
 build:
-    FROM core+final-image
-    ENTRYPOINT ["/bin/agent"]
-    COPY (+compile/main) /bin/agent
+    FROM DOCKERFILE -f Dockerfile .
     ARG REPOSITORY=ghcr.io
     ARG tag=latest
     DO core+SAVE_IMAGE --COMPONENT=agent --REPOSITORY=${REPOSITORY} --TAG=$tag
