@@ -263,7 +263,19 @@ var _ = Describe("Stacks informer", func() {
 				Do(context.Background()).
 				Into(stack)).To(Succeed())
 
+			patchStackStatus(stack.GetName(), false)
+
 			startListener()
+
+			// Wait for the informer to see the stack before deleting it
+			Eventually(func() bool {
+				for _, message := range membershipClientMock.GetMessages() {
+					if message.GetStatusChanged() != nil && message.GetStatusChanged().ClusterName == stack.GetName() {
+						return true
+					}
+				}
+				return false
+			}).Should(BeTrue())
 
 			Expect(k8sClient.Delete().
 				Resource("Stacks").
