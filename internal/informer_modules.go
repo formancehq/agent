@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/logging"
@@ -10,24 +11,24 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func fromUnstructuredToModuleStatusChanged(unstructuredModule *unstructured.Unstructured, status *structpb.Struct) *generated.Message {
-	return &generated.Message{
-		Message: &generated.Message_ModuleStatusChanged{
-			ModuleStatusChanged: &generated.ModuleStatusChanged{
-				ClusterName: unstructuredModule.GetName(),
-				Vk: &generated.VersionKind{
-					Version: unstructuredModule.GetObjectKind().GroupVersionKind().Version,
-					Kind:    unstructuredModule.GetObjectKind().GroupVersionKind().Kind,
-				},
-				Status: status,
-			},
-		},
+func versionKindFromUnstructured(u *unstructured.Unstructured) *generated.VersionKind {
+	return &generated.VersionKind{
+		Version: u.GetObjectKind().GroupVersionKind().Version,
+		Kind:    u.GetObjectKind().GroupVersionKind().Kind,
 	}
 }
 
 type ModuleEventHandler struct {
-	logger logging.Logger
-	client MembershipClient
+	logger   logging.Logger
+	reporter MembershipReporter
+}
+
+func (h *ModuleEventHandler) sendModuleStatus(clusterName string, vk *generated.VersionKind, status *structpb.Struct) error {
+	if err := h.reporter.ReportModuleStatus(context.Background(), clusterName, vk, status); err != nil {
+		h.logger.Errorf("Unable to send module status to server: %s", err)
+		return err
+	}
+	return nil
 }
 
 func (h *ModuleEventHandler) AddFunc(obj interface{}) {
@@ -45,8 +46,8 @@ func (h *ModuleEventHandler) AddFunc(obj interface{}) {
 		return
 	}
 
-	message := fromUnstructuredToModuleStatusChanged(unstructuredModule, status)
-	if err := h.client.Send(message); err != nil {
+	vk := versionKindFromUnstructured(unstructuredModule)
+	if err := h.sendModuleStatus(unstructuredModule.GetName(), vk, status); err != nil {
 		logger.Errorf("Unable to send message module added: %s", err)
 		return
 	}
@@ -75,8 +76,8 @@ func (h *ModuleEventHandler) UpdateFunc(oldObj, newObj any) {
 		return
 	}
 
-	message := fromUnstructuredToModuleStatusChanged(newVersions, newStatus)
-	if err := h.client.Send(message); err != nil {
+	vk := versionKindFromUnstructured(newVersions)
+	if err := h.sendModuleStatus(newVersions.GetName(), vk, newStatus); err != nil {
 		logger.Errorf("Unable to send message module update: %s", err)
 		return
 	}
@@ -88,27 +89,18 @@ func (h *ModuleEventHandler) DeleteFunc(obj interface{}) {
 	unstructuredModule := obj.(*unstructured.Unstructured)
 	logger := h.logger.WithField("func", "Delete").WithField("module", unstructuredModule.GetName())
 
-	if err := h.client.Send(&generated.Message{
-		Message: &generated.Message_ModuleDeleted{
-			ModuleDeleted: &generated.ModuleDeleted{
-				ClusterName: unstructuredModule.GetName(),
-				Vk: &generated.VersionKind{
-					Version: unstructuredModule.GetObjectKind().GroupVersionKind().Version,
-					Kind:    unstructuredModule.GetObjectKind().GroupVersionKind().Kind,
-				},
-			},
-		},
-	}); err != nil {
+	vk := versionKindFromUnstructured(unstructuredModule)
+	if err := h.reporter.ReportModuleDeleted(context.Background(), unstructuredModule.GetName(), vk); err != nil {
 		logger.Errorf("Unable to send message module deleted: %s", err)
 		return
 	}
 	logger.Infof("Detect module '%s' deleted", unstructuredModule.GetName())
 }
 
-func NewModuleEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandlerFuncs {
+func NewModuleEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
 	moduleEventHandler := &ModuleEventHandler{
-		logger: logger,
-		client: membershipClient,
+		logger:   logger,
+		reporter: reporter,
 	}
 
 	return cache.ResourceEventHandlerFuncs{

@@ -25,31 +25,20 @@ import (
 
 var _ = Describe("Membership listener", func() {
 	var (
-		membershipClient *internal.MembershipClientMock
-		clientInfo       internal.ClientInfo
-		ctx              = logging.TestingContext()
+		reporter   *internal.MembershipReporterMock
+		listener   *internal.MembershipListener
+		clientInfo internal.ClientInfo
+		ctx        = logging.TestingContext()
 	)
 	BeforeEach(func() {
-		membershipClient = internal.NewMembershipClientMock()
+		reporter = internal.NewMembershipReporterMock()
 		clientInfo = internal.ClientInfo{
 			BaseUrl: &url.URL{},
 		}
 
 		modules, _, err := internal.RetrieveModuleList(ctx, restConfig)
 		Expect(err).To(BeNil())
-		listener := internal.NewMembershipListener(internal.NewDefaultK8SClient(k8sClient), clientInfo, mapper, membershipClient, modules)
-		done := make(chan struct{})
-		DeferCleanup(func() {
-			<-done
-		})
-		go func() {
-			defer close(done)
-			listener.Start(context.Background())
-		}()
-
-		DeferCleanup(func() {
-			close(membershipClient.Orders())
-		})
+		listener = internal.NewMembershipListener(internal.NewDefaultK8SClient(k8sClient), clientInfo, mapper, reporter, modules)
 	})
 	Context("When sending an existing stack from membership", func() {
 		var (
@@ -79,7 +68,7 @@ var _ = Describe("Membership listener", func() {
 				Expect(k8sClient.Post().Resource("AuthClients").Body(client).Do(context.Background()).Error()).To(BeNil())
 			})
 
-			By("Creating a stack", func() {
+			By("Syncing the stack", func() {
 				modules := make([]*generated.Module, 0)
 				for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
 					object := reflect.New(rtype).Interface()
@@ -124,13 +113,13 @@ var _ = Describe("Membership listener", func() {
 							Public: true,
 						},
 					},
-					Modules: modules,
+					Modules:        modules,
+					ExpectedStatus: "active",
 				}
-				membershipClient.Orders() <- &generated.Order{
-					Message: &generated.Order_ExistingStack{
-						ExistingStack: membershipStack,
-					},
-				}
+
+				// Directly call SyncExistingStack instead of sending over channel
+				listener.SyncExistingStack(ctx, membershipStack)
+
 				stack = &v1beta1.Stack{}
 				Eventually(func() error {
 					return LoadResource("Stacks", membershipStack.ClusterName, stack)
@@ -240,11 +229,8 @@ var _ = Describe("Membership listener", func() {
 					return !exist
 				})
 
-				membershipClient.Orders() <- &generated.Order{
-					Message: &generated.Order_ExistingStack{
-						ExistingStack: membershipStack,
-					},
-				}
+				// Directly call SyncExistingStack instead of sending over channel
+				listener.SyncExistingStack(ctx, membershipStack)
 			})
 			It("modules should be removed", func() {
 				for moduleName := range modulesToRemove {
@@ -257,13 +243,8 @@ var _ = Describe("Membership listener", func() {
 		})
 		Context("then when disabling the stack", func() {
 			BeforeEach(func() {
-				membershipClient.Orders() <- &generated.Order{
-					Message: &generated.Order_DisabledStack{
-						DisabledStack: &generated.DisabledStack{
-							ClusterName: membershipStack.ClusterName,
-						},
-					},
-				}
+				// Directly call DisableStack instead of sending over channel
+				listener.DisableStack(ctx, membershipStack.ClusterName)
 			})
 			shouldBeDisabled := func() {
 				stack := &v1beta1.Stack{}
@@ -276,13 +257,8 @@ var _ = Describe("Membership listener", func() {
 			Context("Then re enabling the stack", func() {
 				BeforeEach(func() {
 					shouldBeDisabled()
-					membershipClient.Orders() <- &generated.Order{
-						Message: &generated.Order_EnabledStack{
-							EnabledStack: &generated.EnabledStack{
-								ClusterName: membershipStack.ClusterName,
-							},
-						},
-					}
+					// Directly call EnableStack instead of sending over channel
+					listener.EnableStack(ctx, membershipStack.ClusterName)
 				})
 				It("Should enable the stack on the cluster", func() {
 					stack := &v1beta1.Stack{}

@@ -8,7 +8,6 @@ import (
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
-	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -19,16 +18,16 @@ import (
 
 var _ = Describe("Stacks informer", func() {
 	var (
-		membershipClientMock *internal.MembershipClientMock
-		startListener        func()
+		reporterMock  *internal.MembershipReporterMock
+		startListener func()
 	)
 	BeforeEach(func() {
-		membershipClientMock = internal.NewMembershipClientMock()
+		reporterMock = internal.NewMembershipReporterMock()
 		dynamicClient, err := dynamic.NewForConfig(restConfig)
 		Expect(err).To(Succeed())
 
 		factory := internal.NewDynamicSharedInformerFactory(dynamicClient, 5*time.Minute)
-		Expect(internal.CreateStacksInformer(factory, logging.Testing(), membershipClientMock)).To(Succeed())
+		Expect(internal.CreateStacksInformer(factory, logging.Testing(), reporterMock)).To(Succeed())
 		startListener = func() {
 			stopCh := make(chan struct{})
 			factory.Start(stopCh)
@@ -83,20 +82,19 @@ var _ = Describe("Stacks informer", func() {
 					Do(context.Background()).Error()).To(Succeed())
 			})
 		})
-		It("Should have sent a Status_Changed", func() {
-			Eventually(func() []*generated.Message {
-				for _, message := range membershipClientMock.GetMessages() {
-					if message.GetStatusChanged() != nil {
-						if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-							isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-							if isReady {
-								return membershipClientMock.GetMessages()
+		It("Should have sent a StackStatus with ready=true", func() {
+			Eventually(func() bool {
+				for _, event := range reporterMock.GetEvents() {
+					if event.Type == "StackStatus" && event.Statuses != nil {
+						if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+							if readyVal.GetBoolValue() {
+								return true
 							}
 						}
 					}
 				}
-				return nil
-			}).ShouldNot(BeEmpty())
+				return false
+			}).Should(BeTrue())
 		})
 		When("The stack is ready", func() {
 			BeforeEach(func() {
@@ -115,20 +113,19 @@ var _ = Describe("Stacks informer", func() {
 					Do(context.Background()).
 					Error()).To(Succeed())
 			})
-			It("Should have sent a Status_Changed", func() {
-				Eventually(func() []*generated.Message {
-					for _, message := range membershipClientMock.GetMessages() {
-						if message.GetStatusChanged() != nil {
-							if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-								isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-								if isReady {
-									return membershipClientMock.GetMessages()
+			It("Should have sent a StackStatus with ready=true", func() {
+				Eventually(func() bool {
+					for _, event := range reporterMock.GetEvents() {
+						if event.Type == "StackStatus" && event.Statuses != nil {
+							if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+								if readyVal.GetBoolValue() {
+									return true
 								}
 							}
 						}
 					}
-					return nil
-				}).ShouldNot(BeEmpty())
+					return false
+				}).Should(BeTrue())
 			})
 		})
 		When("the stack is re-enabled", func() {
@@ -166,20 +163,19 @@ var _ = Describe("Stacks informer", func() {
 						Error()).To(Succeed())
 				})
 			})
-			It("should have sent a Status_Changed", func() {
-				Eventually(func() []*generated.Message {
-					for _, message := range membershipClientMock.GetMessages() {
-						if message.GetStatusChanged() != nil {
-							if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-								isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-								if !isReady {
-									return membershipClientMock.GetMessages()
+			It("should have sent a StackStatus with ready=false", func() {
+				Eventually(func() bool {
+					for _, event := range reporterMock.GetEvents() {
+						if event.Type == "StackStatus" && event.Statuses != nil {
+							if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+								if !readyVal.GetBoolValue() {
+									return true
 								}
 							}
 						}
 					}
-					return []*generated.Message{}
-				}).ShouldNot(BeEmpty())
+					return false
+				}).Should(BeTrue())
 			})
 			When("the stack is reconcilled", func() {
 				BeforeEach(func() {
@@ -202,20 +198,19 @@ var _ = Describe("Stacks informer", func() {
 							Error()).To(Succeed())
 					})
 				})
-				It("should have sent a Status_Changed", func() {
-					Eventually(func() []*generated.Message {
-						for _, message := range membershipClientMock.GetMessages() {
-							if message.GetStatusChanged() != nil {
-								if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-									isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-									if isReady {
-										return membershipClientMock.GetMessages()
+				It("should have sent a StackStatus with ready=true", func() {
+					Eventually(func() bool {
+						for _, event := range reporterMock.GetEvents() {
+							if event.Type == "StackStatus" && event.Statuses != nil {
+								if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+									if readyVal.GetBoolValue() {
+										return true
 									}
 								}
 							}
 						}
-						return nil
-					}).ShouldNot(BeEmpty())
+						return false
+					}).Should(BeTrue())
 				})
 			})
 		})
@@ -261,20 +256,19 @@ var _ = Describe("Stacks informer", func() {
 				Name(stack.Name).
 				Do(context.Background()).Error()).To(Succeed())
 		})
-		It("should have sent a Status_Changed", func() {
-			Eventually(func() []*generated.Message {
-				for _, message := range membershipClientMock.GetMessages() {
-					if message.GetStatusChanged() != nil && message.GetStatusChanged().Status == generated.StackStatus_Progressing && stack.Name == message.GetStatusChanged().ClusterName {
-						if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-							isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-							if !isReady {
-								return membershipClientMock.GetMessages()
+		It("should have sent a StackStatus with ready=false", func() {
+			Eventually(func() bool {
+				for _, event := range reporterMock.GetEvents() {
+					if event.Type == "StackStatus" && event.ClusterName == stack.Name && event.Statuses != nil {
+						if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+							if !readyVal.GetBoolValue() {
+								return true
 							}
 						}
 					}
 				}
-				return nil
-			}).ShouldNot(BeEmpty())
+				return false
+			}).Should(BeTrue())
 		})
 		When("all stack dependent are ready", func() {
 			BeforeEach(func() {
@@ -296,20 +290,19 @@ var _ = Describe("Stacks informer", func() {
 						Error()).To(Succeed())
 				})
 			})
-			It("should have sent a Status_Ready", func() {
-				Eventually(func() []*generated.Message {
-					for _, message := range membershipClientMock.GetMessages() {
-						if message.GetStatusChanged() != nil {
-							if _, ok := message.GetStatusChanged().GetStatuses().Fields["ready"]; ok {
-								isReady := message.GetStatusChanged().GetStatuses().Fields["ready"].GetBoolValue()
-								if isReady {
-									return membershipClientMock.GetMessages()
+			It("should have sent a StackStatus with ready=true", func() {
+				Eventually(func() bool {
+					for _, event := range reporterMock.GetEvents() {
+						if event.Type == "StackStatus" && event.Statuses != nil {
+							if readyVal, ok := event.Statuses.Fields["ready"]; ok {
+								if readyVal.GetBoolValue() {
+									return true
 								}
 							}
 						}
 					}
-					return nil
-				}).ShouldNot(BeEmpty())
+					return false
+				}).Should(BeTrue())
 			})
 		})
 	})
@@ -334,15 +327,15 @@ var _ = Describe("Stacks informer", func() {
 				Name(stack.Name).
 				Do(context.Background()).Error()).To(Succeed())
 		})
-		It("should have sent a Stack_Deleted", func() {
-			Eventually(func() []*generated.Message {
-				for _, message := range membershipClientMock.GetMessages() {
-					if message.GetStackDeleted() != nil && message.GetStackDeleted().ClusterName == stack.Name {
-						return membershipClientMock.GetMessages()
+		It("should have sent a StackDeleted", func() {
+			Eventually(func() bool {
+				for _, event := range reporterMock.GetEvents() {
+					if event.Type == "StackDeleted" && event.ClusterName == stack.Name {
+						return true
 					}
 				}
-				return nil
-			}).ShouldNot(BeEmpty())
+				return false
+			}).Should(BeTrue())
 		})
 	})
 })

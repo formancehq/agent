@@ -23,13 +23,13 @@ import (
 
 var _ = Describe("Informer modules", func() {
 	var (
-		membershipClientMock *internal.MembershipClientMock
-		restMapper           meta.RESTMapper
-		err                  error
+		reporterMock *internal.MembershipReporterMock
+		restMapper   meta.RESTMapper
+		err          error
 	)
 
 	BeforeEach(func() {
-		membershipClientMock = internal.NewMembershipClientMock()
+		reporterMock = internal.NewMembershipReporterMock()
 		restMapper, err = internal.CreateRestMapper(restConfig, logging.Testing())
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -128,7 +128,7 @@ var _ = Describe("Informer modules", func() {
 				dynamicClient, err := dynamic.NewForConfig(restConfig)
 				Expect(err).ToNot(HaveOccurred())
 				factory := internal.NewDynamicSharedInformerFactory(dynamicClient, 5*time.Minute)
-				Expect(internal.CreateModulesInformers(factory, restMapper, logging.Testing(), membershipClientMock)).ToNot(HaveOccurred())
+				Expect(internal.CreateModulesInformers(factory, restMapper, logging.Testing(), reporterMock)).ToNot(HaveOccurred())
 
 				stopCh := make(chan struct{})
 				factory.Start(stopCh)
@@ -136,23 +136,24 @@ var _ = Describe("Informer modules", func() {
 					close(stopCh)
 				})
 			})
-			It("Should have sent ModuleStatusChanged", func() {
+			It("Should have sent ModuleStatus events", func() {
 				for gvk, module := range modules {
 					By(fmt.Sprintf("Checking the module %s", gvk.Kind), func() {
 						Eventually(func(g Gomega) bool {
-							for _, message := range membershipClientMock.GetMessages() {
-								if msg := message.GetModuleStatusChanged(); msg != nil &&
-									msg.Vk.Kind == gvk.Kind &&
-									msg.Vk.Version == gvk.Version &&
-									msg.ClusterName == module.GetName() {
+							for _, event := range reporterMock.GetEvents() {
+								if event.Type == "ModuleStatus" &&
+									event.Vk != nil &&
+									event.Vk.Kind == gvk.Kind &&
+									event.Vk.Version == gvk.Version &&
+									event.ClusterName == module.GetName() {
 
 									status, _, _ := unstructured.NestedMap(module.Object, "status")
 
-									g.Expect(msg.Status.AsMap()["info"]).ToNot(BeNil())
-									g.Expect(msg.Status.AsMap()["ready"]).To(BeFalse())
+									g.Expect(event.Status.AsMap()["info"]).ToNot(BeNil())
+									g.Expect(event.Status.AsMap()["ready"]).To(BeFalse())
 
 									for k, value := range status {
-										g.Expect(msg.Status.AsMap()[k]).To(Equal(value))
+										g.Expect(event.Status.AsMap()[k]).To(Equal(value))
 									}
 									return true
 								}
@@ -178,11 +179,12 @@ var _ = Describe("Informer modules", func() {
 				It("Should have sent ModuleDeleted", func() {
 					By(fmt.Sprintf("Checking message received for %s", moduleDeleted.GetKind()), func() {
 						Eventually(func(g Gomega) bool {
-							for _, message := range membershipClientMock.GetMessages() {
-								if msg := message.GetModuleDeleted(); msg != nil &&
-									msg.Vk.Kind == moduleDeleted.GetKind() &&
-									msg.Vk.Version == strings.Split(moduleDeleted.GetAPIVersion(), "/")[1] &&
-									msg.ClusterName == moduleDeleted.GetName() {
+							for _, event := range reporterMock.GetEvents() {
+								if event.Type == "ModuleDeleted" &&
+									event.Vk != nil &&
+									event.Vk.Kind == moduleDeleted.GetKind() &&
+									event.Vk.Version == strings.Split(moduleDeleted.GetAPIVersion(), "/")[1] &&
+									event.ClusterName == moduleDeleted.GetName() {
 									return true
 								}
 							}

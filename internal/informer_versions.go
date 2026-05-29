@@ -1,11 +1,11 @@
 package internal
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
-	"github.com/formancehq/stack/components/agent/internal/generated"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -22,22 +22,19 @@ func convertUnstructured[T client.Object](v any) T {
 	return t
 }
 
-func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandler {
+func VersionsEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 
 			version := convertUnstructured[*v1beta1.Versions](obj)
 
 			logger.Infof("Detect versions '%s' added", version.Name)
-			if err := membershipClient.Send(&generated.Message{
-				Message: &generated.Message_AddedVersion{
-					AddedVersion: &generated.AddedVersion{
-						Name:       version.Name,
-						Versions:   version.Spec,
-						Deprecated: version.Annotations["formance.com/deprecated"] == "true",
-					},
-				},
-			}); err != nil {
+			if err := reporter.UpsertVersion(
+				context.Background(),
+				version.Name,
+				version.Spec,
+				version.Annotations["formance.com/deprecated"] == "true",
+			); err != nil {
 				logger.Errorf("Unable to send version update: %s", err)
 			}
 		},
@@ -51,15 +48,12 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			}
 
 			logger.Infof("Detect versions '%s' modified", newVersions.Name)
-			if err := membershipClient.Send(&generated.Message{
-				Message: &generated.Message_UpdatedVersion{
-					UpdatedVersion: &generated.UpdatedVersion{
-						Name:       newVersions.Name,
-						Versions:   newVersions.Spec,
-						Deprecated: newVersions.Annotations["formance.com/deprecated"] == "true",
-					},
-				},
-			}); err != nil {
+			if err := reporter.UpsertVersion(
+				context.Background(),
+				newVersions.Name,
+				newVersions.Spec,
+				newVersions.Annotations["formance.com/deprecated"] == "true",
+			); err != nil {
 				logger.Errorf("Unable to send version update: %s", err)
 			}
 		},
@@ -67,13 +61,7 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			version := convertUnstructured[*v1beta1.Versions](obj)
 
 			logger.Infof("Detect versions '%s' as deleted", version.Name)
-			if err := membershipClient.Send(&generated.Message{
-				Message: &generated.Message_DeletedVersion{
-					DeletedVersion: &generated.DeletedVersion{
-						Name: version.Name,
-					},
-				},
-			}); err != nil {
+			if err := reporter.DeleteVersion(context.Background(), version.Name); err != nil {
 				logger.Errorf("Unable to send version update: %s", err)
 			}
 		},

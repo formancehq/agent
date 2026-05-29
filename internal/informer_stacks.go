@@ -1,29 +1,22 @@
 package internal
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/stack/components/agent/internal/generated"
 	"google.golang.org/protobuf/types/known/structpb"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/tools/cache"
 )
 
 type StackEventHandler struct {
-	logger logging.Logger
-	client MembershipClient
+	logger   logging.Logger
+	reporter MembershipReporter
 }
 
 func (h *StackEventHandler) sendStatus(stackName string, status *structpb.Struct) error {
-	if err := h.client.Send(&generated.Message{
-		Message: &generated.Message_StatusChanged{
-			StatusChanged: &generated.StatusChanged{
-				ClusterName: stackName,
-				Statuses:    status,
-			},
-		},
-	}); err != nil {
+	if err := h.reporter.ReportStackStatus(context.Background(), stackName, status); err != nil {
 		h.logger.Errorf("Unable to send stack status to server: %s", err)
 		return err
 	}
@@ -96,23 +89,17 @@ func (h *StackEventHandler) DeleteFunc(obj interface{}) {
 	stack := obj.(*unstructured.Unstructured)
 	logger := h.logger.WithField("func", "Delete").WithField("stack", stack.GetName())
 
-	if err := h.client.Send(&generated.Message{
-		Message: &generated.Message_StackDeleted{
-			StackDeleted: &generated.DeletedStack{
-				ClusterName: stack.GetName(),
-			},
-		},
-	}); err != nil {
+	if err := h.reporter.ReportStackDeleted(context.Background(), stack.GetName()); err != nil {
 		logger.Errorf("Unable to send stack delete to server: %s", err)
 		return
 	}
 	logger.Infof("Stack '%s' deleted", stack.GetName())
 }
 
-func NewStackEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandlerFuncs {
+func NewStackEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
 	stackEventHandler := &StackEventHandler{
-		logger: logger,
-		client: membershipClient,
+		logger:   logger,
+		reporter: reporter,
 	}
 
 	return cache.ResourceEventHandlerFuncs{

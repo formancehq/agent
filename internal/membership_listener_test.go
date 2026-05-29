@@ -117,9 +117,9 @@ func TestDeleteModule(t *testing.T) {
 				require.NoError(t, err)
 
 				require.NoError(t, testConfig.client.Post().Resource(resources.Resource.Resource).Body(&recon).Do(ctx).Error())
-				orders := NewMembershipClientMock()
+				reporter := NewMembershipReporterMock()
 
-				membershipListener := NewMembershipListener(NewDefaultK8SClient(testConfig.client), ClientInfo{}, testConfig.mapper, orders, []v1apis.CustomResourceDefinition{})
+				membershipListener := NewMembershipListener(NewDefaultK8SClient(testConfig.client), ClientInfo{}, testConfig.mapper, reporter, []v1apis.CustomResourceDefinition{})
 
 				if tc.withLabels {
 					require.NoError(t, membershipListener.deleteModule(ctx, logging.Testing(), resources.Resource.Resource, stackName))
@@ -176,7 +176,8 @@ func TestSyncAuthClients(t *testing.T) {
 	}
 	test(t, func(ctx context.Context, tc *testConfig) {
 		t.Parallel()
-		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
+		reporter := NewMembershipReporterMock()
+		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, reporter, []v1apis.CustomResourceDefinition{})
 
 		stackName := uuid.NewString() + "-" + rand(4)
 		stackuid := uuid.NewString()
@@ -233,7 +234,8 @@ func TestSyncStargate(t *testing.T) {
 		t.Run(fmt.Sprintf("%s enabled=%t", t.Name(), tcase.enabled), func(t *testing.T) {
 			test(t, func(ctx context.Context, tc *testConfig) {
 				t.Parallel()
-				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
+				reporter := NewMembershipReporterMock()
+				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, reporter, []v1apis.CustomResourceDefinition{})
 
 				stackName := uuid.NewString() + "-" + rand(4)
 				stackuid := uuid.NewString()
@@ -288,18 +290,16 @@ func TestSyncStargate(t *testing.T) {
 func TestDeleteStackNotExisting(t *testing.T) {
 	test(t, func(ctx context.Context, tc *testConfig) {
 		t.Parallel()
-		mock := NewMembershipClientMock()
-		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, mock, []v1apis.CustomResourceDefinition{})
-		listener.deleteStack(ctx, &generated.DeletedStack{
+		reporter := NewMembershipReporterMock()
+		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, reporter, []v1apis.CustomResourceDefinition{})
+		listener.DeleteStack(ctx, &generated.DeletedStack{
 			ClusterName: "non-existing-stack",
 		})
 
-		messages := mock.GetMessages()
-		require.Len(t, messages, 1)
+		events := reporter.GetEvents()
+		require.Len(t, events, 1)
 
-		message, ok := messages[0].Message.(*generated.Message_StackDeleted)
-		require.True(t, ok)
-
-		require.Equal(t, "non-existing-stack", message.StackDeleted.ClusterName)
+		require.Equal(t, "StackDeleted", events[0].Type)
+		require.Equal(t, "non-existing-stack", events[0].ClusterName)
 	})
 }
