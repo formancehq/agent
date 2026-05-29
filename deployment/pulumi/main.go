@@ -59,9 +59,11 @@ func main() {
 
 		production := cfg.GetBool("production")
 		outdated := cfg.GetBool("outdated")
+		debug := cfg.GetBool("debug")
 
 		// Build Helm values
 		helmValues := pulumi.Map{
+			"debug": pulumi.Bool(debug),
 			"image": pulumi.Map{
 				"repository": pulumi.Sprintf("%s/formancehq/agent", dc.PullRegistry),
 				"tag":        pulumi.Sprintf("latest@%s", agentImage.Digest),
