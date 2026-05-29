@@ -322,6 +322,16 @@ var _ = Describe("Stacks informer", func() {
 
 			startListener()
 
+			// Wait for the informer to see the stack (AddFunc) before deleting
+			Eventually(func() bool {
+				for _, event := range reporterMock.GetEvents() {
+					if event.Type == "StackStatus" && event.ClusterName == stack.Name {
+						return true
+					}
+				}
+				return false
+			}).Should(BeTrue())
+
 			Expect(k8sClient.Delete().
 				Resource("Stacks").
 				Name(stack.Name).
