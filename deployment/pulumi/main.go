@@ -63,7 +63,9 @@ func main() {
 
 		// Build Helm values
 		helmValues := pulumi.Map{
-			"debug": pulumi.Bool(debug),
+			"global": pulumi.Map{
+				"debug": pulumi.Bool(debug),
+			},
 			"image": pulumi.Map{
 				"repository": pulumi.Sprintf("%s/formancehq/agent", dc.PullRegistry),
 				"tag":        pulumi.Sprintf("latest@%s", agentImage.Digest),
