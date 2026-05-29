@@ -11,12 +11,13 @@ import (
 )
 
 type StackEventHandler struct {
+	ctx      context.Context
 	logger   logging.Logger
 	reporter MembershipReporter
 }
 
 func (h *StackEventHandler) sendStatus(stackName string, status *structpb.Struct) error {
-	if err := h.reporter.ReportStackStatus(context.Background(), stackName, status); err != nil {
+	if err := h.reporter.ReportStackStatus(h.ctx, stackName, status); err != nil {
 		h.logger.Errorf("Unable to send stack status to server: %s", err)
 		return err
 	}
@@ -89,15 +90,16 @@ func (h *StackEventHandler) DeleteFunc(obj interface{}) {
 	stack := obj.(*unstructured.Unstructured)
 	logger := h.logger.WithField("func", "Delete").WithField("stack", stack.GetName())
 
-	if err := h.reporter.ReportStackDeleted(context.Background(), stack.GetName()); err != nil {
+	if err := h.reporter.ReportStackDeleted(h.ctx, stack.GetName()); err != nil {
 		logger.Errorf("Unable to send stack delete to server: %s", err)
 		return
 	}
 	logger.Infof("Stack '%s' deleted", stack.GetName())
 }
 
-func NewStackEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
+func NewStackEventHandler(ctx context.Context, logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
 	stackEventHandler := &StackEventHandler{
+		ctx:      ctx,
 		logger:   logger,
 		reporter: reporter,
 	}

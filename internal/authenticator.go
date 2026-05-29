@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"sync"
 
-	oidcclient "github.com/zitadel/oidc/v3/pkg/client"
+	"github.com/zitadel/oidc/v3/pkg/client"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"golang.org/x/oauth2/clientcredentials"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -39,29 +41,49 @@ func TokenAuthenticator(token string) AuthenticatorFn {
 	}
 }
 
-func BearerAuthenticator(issuer, clientID, clientSecret string) AuthenticatorFn {
+type bearerAuthenticator struct {
+	issuer       string
+	clientID     string
+	clientSecret string
 
-	return func(ctx context.Context) (metadata.MD, error) {
+	mu        sync.Mutex
+	discovery *oidc.DiscoveryConfiguration
+}
 
-		discovery, err := oidcclient.Discover(ctx, issuer, http.DefaultClient)
+func (b *bearerAuthenticator) authenticate(ctx context.Context) (metadata.MD, error) {
+	b.mu.Lock()
+	if b.discovery == nil {
+		disc, err := client.Discover(ctx, b.issuer, http.DefaultClient)
 		if err != nil {
+			b.mu.Unlock()
 			return nil, err
 		}
+		b.discovery = disc
+	}
+	tokenURL := b.discovery.TokenEndpoint
+	b.mu.Unlock()
 
-		config := clientcredentials.Config{
-			ClientID:     "region_" + clientID,
-			ClientSecret: clientSecret,
-			TokenURL:     discovery.TokenEndpoint,
-		}
+	config := clientcredentials.Config{
+		ClientID:     "region_" + b.clientID,
+		ClientSecret: b.clientSecret,
+		TokenURL:     tokenURL,
+	}
 
-		token, err := config.Token(ctx)
-		if err != nil {
-			return nil, err
-		}
+	token, err := config.Token(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		return metadata.New(map[string]string{
-			"bearer": token.AccessToken,
-		}), nil
+	return metadata.New(map[string]string{
+		"bearer": token.AccessToken,
+	}), nil
+}
+
+func BearerAuthenticator(issuer, clientID, clientSecret string) Authenticator {
+	return &bearerAuthenticator{
+		issuer:       issuer,
+		clientID:     clientID,
+		clientSecret: clientSecret,
 	}
 }
 

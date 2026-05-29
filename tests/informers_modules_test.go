@@ -128,7 +128,7 @@ var _ = Describe("Informer modules", func() {
 				dynamicClient, err := dynamic.NewForConfig(restConfig)
 				Expect(err).ToNot(HaveOccurred())
 				factory := internal.NewDynamicSharedInformerFactory(dynamicClient, 5*time.Minute)
-				Expect(internal.CreateModulesInformers(factory, restMapper, logging.Testing(), reporterMock)).ToNot(HaveOccurred())
+				Expect(internal.CreateModulesInformers(context.Background(), factory, restMapper, logging.Testing(), reporterMock)).ToNot(HaveOccurred())
 
 				stopCh := make(chan struct{})
 				factory.Start(stopCh)

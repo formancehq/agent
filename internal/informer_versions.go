@@ -22,7 +22,7 @@ func convertUnstructured[T client.Object](v any) T {
 	return t
 }
 
-func VersionsEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandler {
+func VersionsEventHandler(ctx context.Context, logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 
@@ -30,7 +30,7 @@ func VersionsEventHandler(logger logging.Logger, reporter MembershipReporter) ca
 
 			logger.Infof("Detect versions '%s' added", version.Name)
 			if err := reporter.UpsertVersion(
-				context.Background(),
+				ctx,
 				version.Name,
 				version.Spec,
 				version.Annotations["formance.com/deprecated"] == "true",
@@ -49,7 +49,7 @@ func VersionsEventHandler(logger logging.Logger, reporter MembershipReporter) ca
 
 			logger.Infof("Detect versions '%s' modified", newVersions.Name)
 			if err := reporter.UpsertVersion(
-				context.Background(),
+				ctx,
 				newVersions.Name,
 				newVersions.Spec,
 				newVersions.Annotations["formance.com/deprecated"] == "true",
@@ -61,7 +61,7 @@ func VersionsEventHandler(logger logging.Logger, reporter MembershipReporter) ca
 			version := convertUnstructured[*v1beta1.Versions](obj)
 
 			logger.Infof("Detect versions '%s' as deleted", version.Name)
-			if err := reporter.DeleteVersion(context.Background(), version.Name); err != nil {
+			if err := reporter.DeleteVersion(ctx, version.Name); err != nil {
 				logger.Errorf("Unable to send version update: %s", err)
 			}
 		},

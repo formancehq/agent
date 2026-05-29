@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -107,7 +108,7 @@ func TestRestrictModuleStatus(t *testing.T) {
 func TestModuleAddFunc(t *testing.T) {
 	t.Parallel()
 	reporter := internal.NewMembershipReporterMock()
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), reporter)
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	module := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -130,7 +131,7 @@ func TestModuleAddFunc(t *testing.T) {
 func TestModuleDelete(t *testing.T) {
 	t.Parallel()
 	reporter := internal.NewMembershipReporterMock()
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), reporter)
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	module := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -153,7 +154,7 @@ func TestModuleDelete(t *testing.T) {
 func TestModuleUpdateStatusNil(t *testing.T) {
 	t.Parallel()
 	reporter := internal.NewMembershipReporterMock()
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), reporter)
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	oldModule := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -196,7 +197,7 @@ func TestModuleUpdateStatusChanged(t *testing.T) {
 		t.Run("test", func(t *testing.T) {
 			t.Parallel()
 			reporter := internal.NewMembershipReporterMock()
-			resourceInformer := internal.NewModuleEventHandler(logging.Testing(), reporter)
+			resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 			oldModule := &unstructured.Unstructured{
 				Object: map[string]interface{}{

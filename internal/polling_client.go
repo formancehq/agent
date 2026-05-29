@@ -12,10 +12,9 @@ import (
 )
 
 const (
-	defaultPageSize    = 100
-	heartbeatInterval  = 30 * time.Second
-	expectedStatusSync = "active"
-	expectedStatusDel  = "deleted"
+	defaultPageSize   = 100
+	heartbeatInterval = 30 * time.Second
+	expectedStatusDel = "deleted"
 )
 
 type pollingClient struct {
@@ -24,9 +23,9 @@ type pollingClient struct {
 	k8sClient    K8SClient
 	clientInfo   ClientInfo
 	modules      modules
-	eeModules    eeModules
 	pollInterval time.Duration
 	cursor       string // persistent cursor across polls
+	fullSyncDone bool   // tracks whether first full sync with orphan cleanup succeeded
 }
 
 func (p *pollingClient) Start(ctx context.Context) error {
@@ -48,12 +47,16 @@ func (p *pollingClient) Start(ctx context.Context) error {
 func (p *pollingClient) runHeartbeat(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
+	hbBackoff := heartbeatInterval
+	maxBackoff := heartbeatInterval * 16
+
 	// Send initial heartbeat immediately
 	if err := p.sendHeartbeat(ctx); err != nil {
 		logger.Errorf("Initial heartbeat failed: %s", err)
+		hbBackoff = min(hbBackoff*2, maxBackoff)
 	}
 
-	ticker := time.NewTicker(heartbeatInterval)
+	ticker := time.NewTicker(hbBackoff)
 	defer ticker.Stop()
 
 	for {
@@ -63,7 +66,11 @@ func (p *pollingClient) runHeartbeat(ctx context.Context) error {
 		case <-ticker.C:
 			if err := p.sendHeartbeat(ctx); err != nil {
 				logger.Errorf("Heartbeat failed: %s", err)
+				hbBackoff = min(hbBackoff*2, maxBackoff)
+			} else {
+				hbBackoff = heartbeatInterval
 			}
+			ticker.Reset(hbBackoff)
 		}
 	}
 }
@@ -84,13 +91,18 @@ func (p *pollingClient) sendHeartbeat(ctx context.Context) error {
 func (p *pollingClient) runPollLoop(ctx context.Context) error {
 	logger := logging.FromContext(ctx)
 
+	pollBackoff := p.pollInterval
+	maxBackoff := p.pollInterval * 16
+
 	// First poll: full sync with orphan cleanup
-	isFirstPoll := p.cursor == ""
-	if err := p.poll(ctx, isFirstPoll); err != nil {
+	if err := p.poll(ctx, !p.fullSyncDone); err != nil {
 		logger.Errorf("Initial poll failed: %s", err)
+		pollBackoff = min(pollBackoff*2, maxBackoff)
+	} else {
+		pollBackoff = p.pollInterval
 	}
 
-	ticker := time.NewTicker(p.pollInterval)
+	ticker := time.NewTicker(pollBackoff)
 	defer ticker.Stop()
 
 	for {
@@ -98,9 +110,13 @@ func (p *pollingClient) runPollLoop(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := p.poll(ctx, false); err != nil {
+			if err := p.poll(ctx, !p.fullSyncDone); err != nil {
 				logger.Errorf("Poll failed: %s", err)
+				pollBackoff = min(pollBackoff*2, maxBackoff)
+			} else {
+				pollBackoff = p.pollInterval
 			}
+			ticker.Reset(pollBackoff)
 		}
 	}
 }
@@ -144,9 +160,10 @@ func (p *pollingClient) poll(ctx context.Context, isFullSync bool) error {
 		cursor = resp.GetNextCursor()
 	}
 
-	// Orphan cleanup on first poll (full sync)
+	// Orphan cleanup on full sync
 	if isFullSync {
 		p.cleanupOrphans(ctx, allStackNames)
+		p.fullSyncDone = true
 	}
 
 	return nil
@@ -155,24 +172,17 @@ func (p *pollingClient) poll(ctx context.Context, isFullSync bool) error {
 func (p *pollingClient) reconcileStack(ctx context.Context, stack *generated.Stack) {
 	logger := logging.FromContext(ctx)
 
-	switch stack.GetExpectedStatus() {
-	case expectedStatusDel:
+	if stack.GetExpectedStatus() == expectedStatusDel {
 		logger.Infof("Stack %s expected to be deleted, deleting", stack.ClusterName)
 		p.reconciler.DeleteStack(ctx, &generated.DeletedStack{
 			ClusterName: stack.ClusterName,
 		})
-	case expectedStatusSync, "":
-		if stack.GetDisabled() {
-			logger.Infof("Stack %s is disabled, disabling", stack.ClusterName)
-			p.reconciler.DisableStack(ctx, stack.ClusterName)
-		} else {
-			logger.Infof("Syncing existing stack %s", stack.ClusterName)
-			p.reconciler.SyncExistingStack(ctx, stack)
-		}
-	default:
-		logger.Infof("Unknown expected status %q for stack %s, syncing", stack.GetExpectedStatus(), stack.ClusterName)
-		p.reconciler.SyncExistingStack(ctx, stack)
+		return
 	}
+
+	// SyncExistingStack handles both active and disabled stacks (disabled: true in spec)
+	logger.Infof("Syncing existing stack %s (disabled=%t)", stack.ClusterName, stack.GetDisabled())
+	p.reconciler.SyncExistingStack(ctx, stack)
 }
 
 func (p *pollingClient) cleanupOrphans(ctx context.Context, knownStacks map[string]struct{}) {
@@ -210,7 +220,6 @@ func NewPollingClient(
 	k8sClient K8SClient,
 	clientInfo ClientInfo,
 	modules modules,
-	eeModules eeModules,
 	pollInterval time.Duration,
 ) *pollingClient {
 	return &pollingClient{
@@ -219,7 +228,6 @@ func NewPollingClient(
 		k8sClient:    k8sClient,
 		clientInfo:   clientInfo,
 		modules:      modules,
-		eeModules:    eeModules,
 		pollInterval: pollInterval,
 	}
 }

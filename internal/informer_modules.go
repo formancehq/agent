@@ -19,12 +19,13 @@ func versionKindFromUnstructured(u *unstructured.Unstructured) *generated.Versio
 }
 
 type ModuleEventHandler struct {
+	ctx      context.Context
 	logger   logging.Logger
 	reporter MembershipReporter
 }
 
 func (h *ModuleEventHandler) sendModuleStatus(clusterName string, vk *generated.VersionKind, status *structpb.Struct) error {
-	if err := h.reporter.ReportModuleStatus(context.Background(), clusterName, vk, status); err != nil {
+	if err := h.reporter.ReportModuleStatus(h.ctx, clusterName, vk, status); err != nil {
 		h.logger.Errorf("Unable to send module status to server: %s", err)
 		return err
 	}
@@ -90,15 +91,16 @@ func (h *ModuleEventHandler) DeleteFunc(obj interface{}) {
 	logger := h.logger.WithField("func", "Delete").WithField("module", unstructuredModule.GetName())
 
 	vk := versionKindFromUnstructured(unstructuredModule)
-	if err := h.reporter.ReportModuleDeleted(context.Background(), unstructuredModule.GetName(), vk); err != nil {
+	if err := h.reporter.ReportModuleDeleted(h.ctx, unstructuredModule.GetName(), vk); err != nil {
 		logger.Errorf("Unable to send message module deleted: %s", err)
 		return
 	}
 	logger.Infof("Detect module '%s' deleted", unstructuredModule.GetName())
 }
 
-func NewModuleEventHandler(logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
+func NewModuleEventHandler(ctx context.Context, logger logging.Logger, reporter MembershipReporter) cache.ResourceEventHandlerFuncs {
 	moduleEventHandler := &ModuleEventHandler{
+		ctx:      ctx,
 		logger:   logger,
 		reporter: reporter,
 	}

@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -17,7 +18,7 @@ import (
 func TestDeleteFunc(t *testing.T) {
 	t.Parallel()
 	reporter := internal.NewMembershipReporterMock()
-	resourceInformer := internal.NewStackEventHandler(logging.Testing(), reporter)
+	resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 	stack := &v1beta1.Stack{
 		ObjectMeta: v1.ObjectMeta{
@@ -43,7 +44,7 @@ func TestDeleteFunc(t *testing.T) {
 func TestAddStack(t *testing.T) {
 	t.Parallel()
 	reporter := internal.NewMembershipReporterMock()
-	resourceInformer := internal.NewStackEventHandler(logging.Testing(), reporter)
+	resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 	stack := &v1beta1.Stack{
 		ObjectMeta: v1.ObjectMeta{
@@ -101,7 +102,7 @@ func TestUpdateStatus(t *testing.T) {
 			t.Parallel()
 
 			reporter := internal.NewMembershipReporterMock()
-			resourceInformer := internal.NewStackEventHandler(logging.Testing(), reporter)
+			resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 			oldStack := &v1beta1.Stack{
 				ObjectMeta: v1.ObjectMeta{

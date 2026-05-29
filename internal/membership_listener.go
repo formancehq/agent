@@ -1,4 +1,3 @@
-//nolint:nosnakecase
 package internal
 
 import (

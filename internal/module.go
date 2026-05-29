@@ -80,25 +80,25 @@ func createInformer(factory dynamicinformer.DynamicSharedInformerFactory, resour
 	return nil
 }
 
-func CreateVersionsInformer(factory dynamicinformer.DynamicSharedInformerFactory,
+func CreateVersionsInformer(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
 	logger logging.Logger, reporter MembershipReporter) error {
 	logger = logger.WithFields(map[string]any{
 		"component": "versions",
 	})
 	logger.Info("Creating informer")
-	return createInformer(factory, "versions", VersionsEventHandler(logger, reporter))
+	return createInformer(factory, "versions", VersionsEventHandler(ctx, logger, reporter))
 }
 
-func CreateStacksInformer(factory dynamicinformer.DynamicSharedInformerFactory,
+func CreateStacksInformer(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
 	logger logging.Logger, reporter MembershipReporter) error {
 	logger = logger.WithFields(map[string]any{
 		"component": "stacks",
 	})
 	logger.Info("Creating informer")
-	return createInformer(factory, "stacks", NewStackEventHandler(logger, reporter))
+	return createInformer(factory, "stacks", NewStackEventHandler(ctx, logger, reporter))
 }
 
-func CreateModulesInformers(factory dynamicinformer.DynamicSharedInformerFactory,
+func CreateModulesInformers(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
 	restMapper meta.RESTMapper, logger logging.Logger, reporter MembershipReporter) error {
 
 	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
@@ -118,7 +118,7 @@ func CreateModulesInformers(factory dynamicinformer.DynamicSharedInformerFactory
 		})
 
 		logger.Info("Creating informer")
-		if err := createInformer(factory, restMapping.Resource.Resource, NewModuleEventHandler(logger, reporter)); err != nil {
+		if err := createInformer(factory, restMapping.Resource.Resource, NewModuleEventHandler(ctx, logger, reporter)); err != nil {
 			return err
 		}
 	}
@@ -205,15 +205,22 @@ func RetrieveModuleList(ctx context.Context, config *rest.Config) (modules, eeMo
 	return modules, eeModules, nil
 }
 
-func runPollingClient(lc fx.Lifecycle, pollingClient *pollingClient, logger logging.Logger) {
+func runPollingClient(lc fx.Lifecycle, pollingClient *pollingClient, conn *grpc.ClientConn, agentClient generated.AgentServiceClient, logger logging.Logger) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			go func() {
 				if err := pollingClient.Start(logging.ContextWithLogger(ctx, logger)); err != nil {
 					logger.Errorf("Polling client stopped with error: %s", err)
+					panic(err)
 				}
 			}()
 			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			if _, err := agentClient.Disconnect(ctx, &generated.DisconnectRequest{}); err != nil {
+				logger.Errorf("Disconnect RPC failed: %s", err)
+			}
+			return conn.Close()
 		},
 	})
 }
@@ -239,17 +246,18 @@ func NewModule(
 		fx.Provide(RetrieveModuleList),
 		fx.Provide(CreateRestMapper),
 		// Create gRPC connection and AgentService client
-		fx.Provide(func(modules modules, eeModules eeModules) (generated.AgentServiceClient, error) {
-			allOpts := append(opts,
+		fx.Provide(func(modules modules, eeModules eeModules) (*grpc.ClientConn, error) {
+			allOpts := make([]grpc.DialOption, len(opts))
+			copy(allOpts, opts)
+			allOpts = append(allOpts,
 				grpc.WithChainUnaryInterceptor(
 					MetadataUnaryInterceptor(authenticator, clientInfo, modules, eeModules),
 				),
 			)
-			conn, err := grpc.NewClient(serverAddress, allOpts...)
-			if err != nil {
-				return nil, err
-			}
-			return generated.NewAgentServiceClient(conn), nil
+			return grpc.NewClient(serverAddress, allOpts...)
+		}),
+		fx.Provide(func(conn *grpc.ClientConn) generated.AgentServiceClient {
+			return generated.NewAgentServiceClient(conn)
 		}),
 		fx.Provide(func(client generated.AgentServiceClient) MembershipReporter {
 			return NewMembershipReporter(client)
@@ -260,9 +268,8 @@ func NewModule(
 			reconciler *MembershipListener,
 			k8sClient K8SClient,
 			modules modules,
-			eeModules eeModules,
 		) *pollingClient {
-			return NewPollingClient(agentClient, reconciler, k8sClient, clientInfo, modules, eeModules, pollInterval)
+			return NewPollingClient(agentClient, reconciler, k8sClient, clientInfo, modules, pollInterval)
 		}),
 		fx.Invoke(CreateVersionsInformer),
 		fx.Invoke(CreateStacksInformer),

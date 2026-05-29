@@ -27,7 +27,7 @@ var _ = Describe("Stacks informer", func() {
 		Expect(err).To(Succeed())
 
 		factory := internal.NewDynamicSharedInformerFactory(dynamicClient, 5*time.Minute)
-		Expect(internal.CreateStacksInformer(factory, logging.Testing(), reporterMock)).To(Succeed())
+		Expect(internal.CreateStacksInformer(context.Background(), factory, logging.Testing(), reporterMock)).To(Succeed())
 		startListener = func() {
 			stopCh := make(chan struct{})
 			factory.Start(stopCh)
