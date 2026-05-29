@@ -1,57 +1,101 @@
 syntax = "proto3";
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/formancehq/membership/internal/grpc/generated";
 
 package server;
 
-service Server {
-  rpc Join(stream Message) returns (stream Order) {}
+// Pull-based agent service. The agent polls for stacks and reports status via unary RPCs.
+service AgentService {
+  // Agent pulls stacks that need syncing, paginated by (updated_at, id) cursor
+  rpc ListStacks(ListStacksRequest) returns (ListStacksResponse);
+
+  // Agent reports observed state back to membership
+  rpc ReportStackStatus(ReportStackStatusRequest) returns (ReportStackStatusResponse);
+  rpc ReportStackDeleted(ReportStackDeletedRequest) returns (ReportStackDeletedResponse);
+  rpc ReportModuleStatus(ReportModuleStatusRequest) returns (ReportModuleStatusResponse);
+  rpc ReportModuleDeleted(ReportModuleDeletedRequest) returns (ReportModuleDeletedResponse);
+
+  // Version management
+  rpc UpsertVersion(UpsertVersionRequest) returns (UpsertVersionResponse);
+  rpc DeleteVersion(DeleteVersionRequest) returns (DeleteVersionResponse);
+
+  // Agent heartbeat (replaces ping/pong)
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Graceful disconnect — marks the region as inactive
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
 }
 
-message ConnectRequest {
-  string id = 1;
-  map<string, string> tags = 2;
-  string baseUrl = 3;
-  bool production = 4;
+// ─── ListStacks ───
+
+message ListStacksRequest {
+  string region_id = 1;
+  int32 page_size = 2;
+  string cursor = 3; // opaque, base64-encoded (updated_at, id). Empty = start from beginning.
 }
 
-message Order {
-  reserved 5;
-  oneof message {
-    Connected connected = 1;
-    Stack existingStack = 2;
-    DeletedStack deletedStack = 3;
-    Ping ping = 4;
-    DisabledStack disabledStack = 6;
-    EnabledStack enabledStack = 7;
-  }
-  map<string, string> metadata = 8;
+message ListStacksResponse {
+  repeated Stack stacks = 1;
+  string next_cursor = 2; // empty if last page
+  bool has_more = 3;
 }
 
-message Message {
-  oneof message {
-    StatusChanged statusChanged = 1;
-    Pong pong = 2;
-    
-    AddedVersion addedVersion = 3;
-    DeletedVersion deletedVersion = 4;
-    UpdatedVersion updatedVersion = 5;
-    
-    ModuleStatusChanged moduleStatusChanged = 6;
-    ModuleDeleted moduleDeleted = 7;
+// ─── Report messages ───
 
-    DeletedStack stackDeleted = 8;
-  }
-  map<string, string> metadata = 9;
+message ReportStackStatusRequest {
+  StatusChanged status_changed = 1;
 }
+message ReportStackStatusResponse {}
 
-message Connected {}
+message ReportStackDeletedRequest {
+  DeletedStack stack_deleted = 1;
+}
+message ReportStackDeletedResponse {}
 
-message Ping {}
+message ReportModuleStatusRequest {
+  ModuleStatusChanged module_status_changed = 1;
+}
+message ReportModuleStatusResponse {}
 
-message Pong {}
+message ReportModuleDeletedRequest {
+  ModuleDeleted module_deleted = 1;
+}
+message ReportModuleDeletedResponse {}
+
+// ─── Version management ───
+
+message UpsertVersionRequest {
+  string name = 1;
+  map<string, string> versions = 2;
+  bool deprecated = 3;
+}
+message UpsertVersionResponse {}
+
+message DeleteVersionRequest {
+  string name = 1;
+}
+message DeleteVersionResponse {}
+
+// ─── Heartbeat ───
+
+message HeartbeatRequest {
+  string region_id = 1;
+  string base_url = 2;
+  repeated string additional_base_urls = 3;
+  string version = 4;
+  bool production = 5;
+  repeated string capabilities = 6;
+  repeated string modules = 7;
+}
+message HeartbeatResponse {}
+
+message DisconnectRequest {}
+message DisconnectResponse {}
+
+// ─── Shared data types ───
 
 message Stack {
   string clusterName = 1;
@@ -66,6 +110,8 @@ message Stack {
   map<string, string> additionalLabels = 10;
   map<string, string> additionalAnnotations = 11;
   repeated Module modules = 12;
+  string expectedStatus = 13;
+  google.protobuf.Timestamp updated_at = 14;
 }
 
 message Module {
@@ -109,14 +155,6 @@ message StargateConfig {
 }
 
 message DeletedStack {
-  string clusterName = 1;
-}
-
-message DisabledStack {
-  string clusterName = 1;
-}
-
-message EnabledStack {
   string clusterName = 1;
 }
 

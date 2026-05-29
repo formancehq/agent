@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -107,9 +107,8 @@ func TestRestrictModuleStatus(t *testing.T) {
 
 func TestModuleAddFunc(t *testing.T) {
 	t.Parallel()
-	ctrl := gomock.NewController(t)
-	membershipClientMock := internal.NewMockMembershipClient(ctrl)
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), membershipClientMock)
+	reporter := internal.NewMembershipReporterMock()
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	module := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -122,17 +121,17 @@ func TestModuleAddFunc(t *testing.T) {
 		},
 	}
 
-	membershipClientMock.EXPECT().Send(gomock.Any())
 	resourceInformer.AddFunc(module)
-	require.True(t, ctrl.Satisfied())
 
+	events := reporter.GetEvents()
+	require.Len(t, events, 1)
+	require.Equal(t, "ModuleStatus", events[0].Type)
 }
 
 func TestModuleDelete(t *testing.T) {
 	t.Parallel()
-	ctrl := gomock.NewController(t)
-	membershipClientMock := internal.NewMockMembershipClient(ctrl)
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), membershipClientMock)
+	reporter := internal.NewMembershipReporterMock()
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	module := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -145,16 +144,17 @@ func TestModuleDelete(t *testing.T) {
 		},
 	}
 
-	membershipClientMock.EXPECT().Send(gomock.Any())
 	resourceInformer.DeleteFunc(module)
-	require.True(t, ctrl.Satisfied())
+
+	events := reporter.GetEvents()
+	require.Len(t, events, 1)
+	require.Equal(t, "ModuleDeleted", events[0].Type)
 }
 
 func TestModuleUpdateStatusNil(t *testing.T) {
 	t.Parallel()
-	ctrl := gomock.NewController(t)
-	membershipClientMock := internal.NewMockMembershipClient(ctrl)
-	resourceInformer := internal.NewModuleEventHandler(logging.Testing(), membershipClientMock)
+	reporter := internal.NewMembershipReporterMock()
+	resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 	oldModule := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -173,9 +173,11 @@ func TestModuleUpdateStatusNil(t *testing.T) {
 	}
 
 	resourceInformer.UpdateFunc(oldModule, newModule)
-	require.True(t, ctrl.Satisfied())
 
+	events := reporter.GetEvents()
+	require.Empty(t, events)
 }
+
 func TestModuleUpdateStatusChanged(t *testing.T) {
 
 	type testCase struct {
@@ -194,9 +196,8 @@ func TestModuleUpdateStatusChanged(t *testing.T) {
 		tc := tc
 		t.Run("test", func(t *testing.T) {
 			t.Parallel()
-			ctrl := gomock.NewController(t)
-			membershipClientMock := internal.NewMockMembershipClient(ctrl)
-			resourceInformer := internal.NewModuleEventHandler(logging.Testing(), membershipClientMock)
+			reporter := internal.NewMembershipReporterMock()
+			resourceInformer := internal.NewModuleEventHandler(context.Background(), logging.Testing(), reporter)
 
 			oldModule := &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -219,11 +220,16 @@ func TestModuleUpdateStatusChanged(t *testing.T) {
 					},
 				},
 			}
-			if tc.isReady != tc.wasReady {
-				membershipClientMock.EXPECT().Send(gomock.Any())
-			}
+
 			resourceInformer.UpdateFunc(oldModule, newModule)
-			require.True(t, ctrl.Satisfied())
+
+			events := reporter.GetEvents()
+			if tc.isReady != tc.wasReady {
+				require.Len(t, events, 1)
+				require.Equal(t, "ModuleStatus", events[0].Type)
+			} else {
+				require.Empty(t, events)
+			}
 		})
 	}
 

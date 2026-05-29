@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,9 +17,8 @@ import (
 
 func TestDeleteFunc(t *testing.T) {
 	t.Parallel()
-	ctrl := gomock.NewController(t)
-	membershipClientMock := internal.NewMockMembershipClient(ctrl)
-	resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
+	reporter := internal.NewMembershipReporterMock()
+	resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 	stack := &v1beta1.Stack{
 		ObjectMeta: v1.ObjectMeta{
@@ -27,7 +26,6 @@ func TestDeleteFunc(t *testing.T) {
 		},
 	}
 
-	membershipClientMock.EXPECT().Send(gomock.Any())
 	unstructuredStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stack)
 	if err != nil {
 		t.Fatalf("failed to convert stack to unstructured: %v", err)
@@ -37,14 +35,16 @@ func TestDeleteFunc(t *testing.T) {
 		Object: unstructuredStack,
 	})
 
-	require.True(t, ctrl.Satisfied())
+	events := reporter.GetEvents()
+	require.Len(t, events, 1)
+	require.Equal(t, "StackDeleted", events[0].Type)
+	require.Equal(t, stack.Name, events[0].ClusterName)
 }
 
 func TestAddStack(t *testing.T) {
 	t.Parallel()
-	ctrl := gomock.NewController(t)
-	membershipClientMock := internal.NewMockMembershipClient(ctrl)
-	resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
+	reporter := internal.NewMembershipReporterMock()
+	resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 	stack := &v1beta1.Stack{
 		ObjectMeta: v1.ObjectMeta{
@@ -55,7 +55,6 @@ func TestAddStack(t *testing.T) {
 		},
 	}
 
-	membershipClientMock.EXPECT().Send(gomock.Any())
 	unstructuredStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stack)
 	if err != nil {
 		t.Fatalf("failed to convert stack to unstructured: %v", err)
@@ -64,7 +63,9 @@ func TestAddStack(t *testing.T) {
 		Object: unstructuredStack,
 	})
 
-	require.True(t, ctrl.Satisfied())
+	events := reporter.GetEvents()
+	require.Len(t, events, 1)
+	require.Equal(t, "StackStatus", events[0].Type)
 }
 
 // We are watching .Status and .Spec fields of the stack resource.
@@ -100,9 +101,8 @@ func TestUpdateStatus(t *testing.T) {
 		t.Run(fmt.Sprintf("isReady: %t isDisabled: %t wasReady: %t wasDisabled: %t", tc.isReady, tc.isDisabled, tc.wasReady, tc.wasDisabled), func(t *testing.T) {
 			t.Parallel()
 
-			ctrl := gomock.NewController(t)
-			membershipClientMock := internal.NewMockMembershipClient(ctrl)
-			resourceInformer := internal.NewStackEventHandler(logging.Testing(), membershipClientMock)
+			reporter := internal.NewMembershipReporterMock()
+			resourceInformer := internal.NewStackEventHandler(context.Background(), logging.Testing(), reporter)
 
 			oldStack := &v1beta1.Stack{
 				ObjectMeta: v1.ObjectMeta{
@@ -122,9 +122,7 @@ func TestUpdateStatus(t *testing.T) {
 			newStack.Status.Ready = tc.isReady
 			newStack.Spec.Disabled = tc.isDisabled
 
-			if tc.isReady != tc.wasReady || tc.isDisabled != tc.wasDisabled {
-				membershipClientMock.EXPECT().Send(gomock.Any())
-			}
+			expectCall := tc.isReady != tc.wasReady || tc.isDisabled != tc.wasDisabled
 
 			unstructuredOldStack, err := runtime.DefaultUnstructuredConverter.ToUnstructured(oldStack)
 			if err != nil {
@@ -141,7 +139,13 @@ func TestUpdateStatus(t *testing.T) {
 				Object: unstructuredNewStack,
 			})
 
-			require.True(t, ctrl.Satisfied())
+			events := reporter.GetEvents()
+			if expectCall {
+				require.Len(t, events, 1)
+				require.Equal(t, "StackStatus", events[0].Type)
+			} else {
+				require.Empty(t, events)
+			}
 		})
 	}
 }

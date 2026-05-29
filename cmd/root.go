@@ -52,6 +52,7 @@ const (
 	productionFlag                 = "production"
 	outdatedFlag                   = "outdated"
 	resyncPeriodFlag               = "resync-period"
+	pollIntervalFlag               = "poll-interval"
 )
 
 var rootCmd = &cobra.Command{
@@ -89,6 +90,7 @@ func init() {
 	rootCmd.Flags().Bool(productionFlag, false, "Is a production agent")
 	rootCmd.Flags().Bool(outdatedFlag, false, "Set the region as outdated when connecting")
 	rootCmd.Flags().Duration(resyncPeriodFlag, 5*time.Minute, "Resync period of K8S resources")
+	rootCmd.Flags().Duration(pollIntervalFlag, 10*time.Second, "Poll interval for membership API")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
@@ -107,13 +109,13 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 		return errors.New("missing id")
 	}
 
-	credentials, err := createGRPCTransportCredentials(cmd)
+	creds, err := createGRPCTransportCredentials(cmd)
 	if err != nil {
 		return err
 	}
 
 	dialOptions := make([]grpc.DialOption, 0)
-	dialOptions = append(dialOptions, grpc.WithTransportCredentials(credentials))
+	dialOptions = append(dialOptions, grpc.WithTransportCredentials(creds))
 
 	baseUrlString, _ := cmd.Flags().GetString(baseUrlFlag)
 	if baseUrlString == "" {
@@ -152,6 +154,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	resyncPeriod, _ := cmd.Flags().GetDuration(resyncPeriodFlag)
 	outdated, _ := cmd.Flags().GetBool(outdatedFlag)
 	additionalBaseUrls, _ := cmd.Flags().GetStringSlice(additionalBaseUrlsFlag)
+	pollInterval, _ := cmd.Flags().GetDuration(pollIntervalFlag)
 
 	options := []fx.Option{
 		fx.Supply(restConfig),
@@ -160,7 +163,6 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 			return logging.ContextWithLogger(cmd.Context(), l)
 		}),
 		internal.NewModule(
-			service.IsDebug(cmd),
 			serverAddress,
 			authenticator,
 			internal.ClientInfo{
@@ -171,6 +173,7 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 				Outdated:           outdated,
 				Version:            Version,
 			}, resyncPeriod,
+			pollInterval,
 			dialOptions...,
 		),
 		otlp.FXModuleFromFlags(cmd, otlp.WithServiceVersion(Version)),

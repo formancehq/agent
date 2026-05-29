@@ -9,7 +9,7 @@ import (
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
-	"github.com/formancehq/stack/components/agent/internal/grpcclient"
+	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/pkg/errors"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
@@ -80,26 +80,26 @@ func createInformer(factory dynamicinformer.DynamicSharedInformerFactory, resour
 	return nil
 }
 
-func CreateVersionsInformer(factory dynamicinformer.DynamicSharedInformerFactory,
-	logger logging.Logger, client MembershipClient) error {
+func CreateVersionsInformer(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
+	logger logging.Logger, reporter MembershipReporter) error {
 	logger = logger.WithFields(map[string]any{
 		"component": "versions",
 	})
 	logger.Info("Creating informer")
-	return createInformer(factory, "versions", VersionsEventHandler(logger, client))
+	return createInformer(factory, "versions", VersionsEventHandler(ctx, logger, reporter))
 }
 
-func CreateStacksInformer(factory dynamicinformer.DynamicSharedInformerFactory,
-	logger logging.Logger, client MembershipClient) error {
+func CreateStacksInformer(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
+	logger logging.Logger, reporter MembershipReporter) error {
 	logger = logger.WithFields(map[string]any{
 		"component": "stacks",
 	})
 	logger.Info("Creating informer")
-	return createInformer(factory, "stacks", NewStackEventHandler(logger, client))
+	return createInformer(factory, "stacks", NewStackEventHandler(ctx, logger, reporter))
 }
 
-func CreateModulesInformers(factory dynamicinformer.DynamicSharedInformerFactory,
-	restMapper meta.RESTMapper, logger logging.Logger, client MembershipClient) error {
+func CreateModulesInformers(ctx context.Context, factory dynamicinformer.DynamicSharedInformerFactory,
+	restMapper meta.RESTMapper, logger logging.Logger, reporter MembershipReporter) error {
 
 	for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
 		object := reflect.New(rtype).Interface()
@@ -118,7 +118,7 @@ func CreateModulesInformers(factory dynamicinformer.DynamicSharedInformerFactory
 		})
 
 		logger.Info("Creating informer")
-		if err := createInformer(factory, restMapping.Resource.Resource, NewModuleEventHandler(logger, client)); err != nil {
+		if err := createInformer(factory, restMapping.Resource.Resource, NewModuleEventHandler(ctx, logger, reporter)); err != nil {
 			return err
 		}
 	}
@@ -205,41 +205,32 @@ func RetrieveModuleList(ctx context.Context, config *rest.Config) (modules, eeMo
 	return modules, eeModules, nil
 }
 
-func runMembershipClient(lc fx.Lifecycle, debug bool, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
+func runPollingClient(lc fx.Lifecycle, pollingClient *pollingClient, conn *grpc.ClientConn, agentClient generated.AgentServiceClient, logger logging.Logger) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			client, err := membershipClient.connect(logging.ContextWithLogger(ctx, logger))
-			if err != nil {
-				return err
-			}
-			clientWithTrace := grpcclient.NewConnectionWithTrace(client, debug)
-
 			go func() {
-				if err := membershipClient.Start(logging.ContextWithLogger(ctx, logger), clientWithTrace); err != nil {
+				if err := pollingClient.Start(logging.ContextWithLogger(ctx, logger)); err != nil {
+					logger.Errorf("Polling client stopped with error: %s", err)
 					panic(err)
 				}
 			}()
 			return nil
 		},
-		OnStop: membershipClient.Stop,
-	})
-}
-
-func runMembershipListener(lc fx.Lifecycle, client *membershipListener, logger logging.Logger) {
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go client.Start(logging.ContextWithLogger(ctx, logger))
-			return nil
+		OnStop: func(ctx context.Context) error {
+			if _, err := agentClient.Disconnect(ctx, &generated.DisconnectRequest{}); err != nil {
+				logger.Errorf("Disconnect RPC failed: %s", err)
+			}
+			return conn.Close()
 		},
 	})
 }
 
 func NewModule(
-	debug bool,
 	serverAddress string,
 	authenticator Authenticator,
 	clientInfo ClientInfo,
 	resyncPeriod time.Duration,
+	pollInterval time.Duration,
 	opts ...grpc.DialOption,
 ) fx.Option {
 	return fx.Options(
@@ -254,20 +245,36 @@ func NewModule(
 		}),
 		fx.Provide(RetrieveModuleList),
 		fx.Provide(CreateRestMapper),
-		fx.Provide(func(modules modules, eeModules eeModules) *membershipClient {
-			return NewMembershipClient(authenticator, clientInfo, serverAddress, modules, eeModules, opts...)
+		// Create gRPC connection and AgentService client
+		fx.Provide(func(modules modules, eeModules eeModules) (*grpc.ClientConn, error) {
+			allOpts := make([]grpc.DialOption, len(opts))
+			copy(allOpts, opts)
+			allOpts = append(allOpts,
+				grpc.WithChainUnaryInterceptor(
+					MetadataUnaryInterceptor(authenticator, clientInfo, modules, eeModules),
+				),
+			)
+			return grpc.NewClient(serverAddress, allOpts...)
 		}),
-		fx.Provide(func(membershipClient *membershipClient) MembershipClient {
-			return membershipClient
+		fx.Provide(func(conn *grpc.ClientConn) generated.AgentServiceClient {
+			return generated.NewAgentServiceClient(conn)
+		}),
+		fx.Provide(func(client generated.AgentServiceClient) MembershipReporter {
+			return NewMembershipReporter(client)
 		}),
 		fx.Provide(NewMembershipListener),
+		fx.Provide(func(
+			agentClient generated.AgentServiceClient,
+			reconciler *MembershipListener,
+			k8sClient K8SClient,
+			modules modules,
+		) *pollingClient {
+			return NewPollingClient(agentClient, reconciler, k8sClient, clientInfo, modules, pollInterval)
+		}),
 		fx.Invoke(CreateVersionsInformer),
 		fx.Invoke(CreateStacksInformer),
 		fx.Invoke(CreateModulesInformers),
-		fx.Invoke(func(lc fx.Lifecycle, membershipClient *membershipClient, logger logging.Logger, config *rest.Config) {
-			runMembershipClient(lc, debug, membershipClient, logger, config)
-		}),
-		fx.Invoke(runMembershipListener),
+		fx.Invoke(runPollingClient),
 		fx.Invoke(runInformers),
 	)
 }

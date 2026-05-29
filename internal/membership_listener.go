@@ -1,4 +1,3 @@
-//nolint:nosnakecase
 package internal
 
 import (
@@ -9,19 +8,15 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 
-	"go.opentelemetry.io/otel/attribute"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 
-	"github.com/alitto/pond"
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
-	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,40 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//go:generate mockgen -source=membership_listener.go -destination=membership_client_generated.go -package=internal . MembershipClient
-type MembershipClient interface {
-	Orders() chan *generated.Order
-	Send(message *generated.Message) error
-}
-
-type MembershipClientMock struct {
-	mu       sync.Mutex
-	orders   chan *generated.Order
-	messages []*generated.Message
-}
-
-func (m *MembershipClientMock) Orders() chan *generated.Order {
-	return m.orders
-}
-
-func (m *MembershipClientMock) Send(message *generated.Message) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.messages = append(m.messages, message)
-	return nil
-}
-
-func (m *MembershipClientMock) GetMessages() []*generated.Message {
-	return m.messages
-}
-
-func NewMembershipClientMock() *MembershipClientMock {
-	return &MembershipClientMock{
-		orders: make(chan *generated.Order),
-	}
-}
-
 type ClientInfo struct {
 	ID                 string
 	BaseUrl            *url.URL
@@ -77,78 +38,16 @@ type ClientInfo struct {
 	Version    string
 }
 
-type membershipListener struct {
+type MembershipListener struct {
 	clientInfo ClientInfo
 	client     K8SClient
+	reporter   MembershipReporter
 
-	restMapper       meta.RESTMapper
-	membershipClient MembershipClient
-	modules          modules
-	wp               *pond.WorkerPool
+	restMapper meta.RESTMapper
+	modules    modules
 }
 
-func (c *membershipListener) Start(ctx context.Context) {
-	defer c.wp.StopAndWait()
-	for {
-		select {
-		case msg, ok := <-c.membershipClient.Orders():
-			if !ok {
-				return
-			}
-
-			c.wp.Submit(func() {
-				ctx = grpcclient.ExtractOtelCtxFromMessage(ctx, msg)
-
-				ctx, span := tracer.Start(ctx, "NewOrder")
-				defer span.End()
-
-				logger := logging.FromContext(ctx).
-					WithField("traceId", span.SpanContext().TraceID()).
-					WithField("spanId", span.SpanContext().SpanID())
-				logger.Infof("Got message from membership: %T", msg.GetMessage())
-
-				switch msg := msg.Message.(type) {
-				case *generated.Order_ExistingStack:
-					logger = logger.WithField("stack", msg.ExistingStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("SyncExistingStack")
-					span.SetAttributes(attribute.String("stack", msg.ExistingStack.ClusterName))
-
-					c.syncExistingStack(ctx, msg.ExistingStack)
-				case *generated.Order_DeletedStack:
-					logger = logger.WithField("stack", msg.DeletedStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("DeleteStack")
-					span.SetAttributes(attribute.String("stack", msg.DeletedStack.ClusterName))
-
-					c.deleteStack(ctx, msg.DeletedStack)
-				case *generated.Order_DisabledStack:
-					logger = logger.WithField("stack", msg.DisabledStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("DisableStack")
-					span.SetAttributes(attribute.String("stack", msg.DisabledStack.ClusterName))
-
-					c.disableStack(ctx, msg.DisabledStack)
-				case *generated.Order_EnabledStack:
-					logger = logger.WithField("stack", msg.EnabledStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("EnableStack")
-					span.SetAttributes(attribute.String("stack", msg.EnabledStack.ClusterName))
-
-					c.enableStack(ctx, msg.EnabledStack)
-				}
-			})
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (c *membershipListener) syncExistingStack(ctx context.Context, membershipStack *generated.Stack) {
+func (c *MembershipListener) SyncExistingStack(ctx context.Context, membershipStack *generated.Stack) {
 	versions := membershipStack.Versions
 	if versions == "" {
 		versions = "default"
@@ -175,7 +74,7 @@ func (c *membershipListener) syncExistingStack(ctx context.Context, membershipSt
 	logging.FromContext(ctx).Infof("Stack %s updated cluster side", stack.GetName())
 }
 
-func (c *membershipListener) generateMetadata(membershipStack *generated.Stack) map[string]any {
+func (c *MembershipListener) generateMetadata(membershipStack *generated.Stack) map[string]any {
 	additionalLabels := map[string]any{}
 	for key, value := range membershipStack.AdditionalLabels {
 		additionalLabels["formance.com/"+key] = value
@@ -192,7 +91,7 @@ func (c *membershipListener) generateMetadata(membershipStack *generated.Stack) 
 	}
 
 }
-func (c *membershipListener) syncModules(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
+func (c *MembershipListener) syncModules(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
 	expectedModules := collectionutils.Map(membershipStack.Modules, func(module *generated.Module) string {
 		return strings.ToLower(module.Name)
 	})
@@ -270,13 +169,13 @@ func (c *membershipListener) syncModules(ctx context.Context, metadata map[strin
 	}
 }
 
-func (c *membershipListener) deleteModule(ctx context.Context, logger logging.Logger, resource string, stackName string) error {
+func (c *MembershipListener) deleteModule(ctx context.Context, logger logging.Logger, resource string, stackName string) error {
 	logger.Debugf("Deleting module %s", resource)
 
 	return c.client.EnsureNotExistsBySelector(ctx, resource, stackLabels(stackName))
 }
 
-func (c *membershipListener) syncStargate(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
+func (c *MembershipListener) syncStargate(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, membershipStack *generated.Stack) {
 	logger := logging.FromContext(ctx).WithField("stack", stack.GetName())
 	if membershipStack.StargateConfig != nil && membershipStack.StargateConfig.Enabled {
 		parts := strings.Split(stack.GetName(), "-")
@@ -311,7 +210,7 @@ func (c *membershipListener) syncStargate(ctx context.Context, metadata map[stri
 	}
 }
 
-func (c *membershipListener) syncAuthClients(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, staticClients []*generated.AuthClient) {
+func (c *MembershipListener) syncAuthClients(ctx context.Context, metadata map[string]any, stack *unstructured.Unstructured, staticClients []*generated.AuthClient) {
 	expectedAuthClients := make([]*unstructured.Unstructured, 0)
 	for _, client := range staticClients {
 		authClient, err := c.createOrUpdateStackDependency(ctx, fmt.Sprintf("%s-%s", stack.GetName(), client.Id), stack.GetName(),
@@ -352,17 +251,11 @@ func (c *membershipListener) syncAuthClients(ctx context.Context, metadata map[s
 	}
 }
 
-func (c *membershipListener) deleteStack(ctx context.Context, stack *generated.DeletedStack) {
+func (c *MembershipListener) DeleteStack(ctx context.Context, stack *generated.DeletedStack) {
 	logger := logging.FromContext(ctx).WithField("func", "Delete").WithField("stack", stack.ClusterName)
 	if err := c.client.Delete(ctx, "Stacks", stack.ClusterName); err != nil {
 		if apierrors.IsNotFound(err) {
-			if err := c.membershipClient.Send(&generated.Message{
-				Message: &generated.Message_StackDeleted{
-					StackDeleted: &generated.DeletedStack{
-						ClusterName: stack.ClusterName,
-					},
-				},
-			}); err != nil {
+			if err := c.reporter.ReportStackDeleted(ctx, stack.ClusterName); err != nil {
 				logger.Errorf("Unable to send stack delete to server: %s", err)
 				return
 			}
@@ -376,25 +269,25 @@ func (c *membershipListener) deleteStack(ctx context.Context, stack *generated.D
 	logger.Infof("Stack %s deleted", stack.ClusterName)
 }
 
-func (c *membershipListener) disableStack(ctx context.Context, stack *generated.DisabledStack) {
-	if err := c.client.Patch(ctx, "Stacks", stack.ClusterName, []byte(`{"spec": {"disabled": true}}`)); err != nil {
+func (c *MembershipListener) DisableStack(ctx context.Context, clusterName string) {
+	if err := c.client.Patch(ctx, "Stacks", clusterName, []byte(`{"spec": {"disabled": true}}`)); err != nil {
 		logging.FromContext(ctx).Errorf("Disabling cluster side: %s", err)
 		return
 	}
 
-	logging.FromContext(ctx).Infof("Stack %s disabled", stack.ClusterName)
+	logging.FromContext(ctx).Infof("Stack %s disabled", clusterName)
 }
 
-func (c *membershipListener) enableStack(ctx context.Context, stack *generated.EnabledStack) {
-	if err := c.client.Patch(ctx, "Stacks", stack.ClusterName, []byte(`{"spec": {"disabled": false}}`)); err != nil {
-		logging.FromContext(ctx).Errorf("Disabling cluster side: %s", err)
+func (c *MembershipListener) EnableStack(ctx context.Context, clusterName string) {
+	if err := c.client.Patch(ctx, "Stacks", clusterName, []byte(`{"spec": {"disabled": false}}`)); err != nil {
+		logging.FromContext(ctx).Errorf("Enabling cluster side: %s", err)
 		return
 	}
 
-	logging.FromContext(ctx).Infof("Stack %s enabled", stack.ClusterName)
+	logging.FromContext(ctx).Infof("Stack %s enabled", clusterName)
 }
 
-func (c *membershipListener) createOrUpdate(ctx context.Context, gvk schema.GroupVersionKind, name string, stackName string, owner *metav1.OwnerReference, content map[string]any) (*unstructured.Unstructured, error) {
+func (c *MembershipListener) createOrUpdate(ctx context.Context, gvk schema.GroupVersionKind, name string, stackName string, owner *metav1.OwnerReference, content map[string]any) (*unstructured.Unstructured, error) {
 
 	logger := logging.FromContext(ctx).WithFields(map[string]any{
 		"gvk": gvk,
@@ -459,7 +352,7 @@ func (c *membershipListener) createOrUpdate(ctx context.Context, gvk schema.Grou
 	return u, nil
 }
 
-func (c *membershipListener) createOrUpdateStackDependency(
+func (c *MembershipListener) createOrUpdateStackDependency(
 	ctx context.Context,
 	name string,
 	stackName string,
@@ -485,16 +378,15 @@ func NewMembershipListener(
 	client K8SClient,
 	clientInfo ClientInfo,
 	mapper meta.RESTMapper,
-	membershipClient MembershipClient,
+	reporter MembershipReporter,
 	modules modules,
-) *membershipListener {
-	return &membershipListener{
-		client:           client,
-		clientInfo:       clientInfo,
-		restMapper:       mapper,
-		membershipClient: membershipClient,
-		wp:               pond.New(5, 5),
-		modules:          modules,
+) *MembershipListener {
+	return &MembershipListener{
+		client:     client,
+		clientInfo: clientInfo,
+		restMapper: mapper,
+		reporter:   reporter,
+		modules:    modules,
 	}
 }
 
