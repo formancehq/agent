@@ -24,6 +24,9 @@ service AgentService {
 
   // Agent heartbeat (replaces ping/pong)
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Graceful disconnect — marks the region as inactive
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
 }
 
 // ─── ListStacks ───
@@ -88,6 +91,9 @@ message HeartbeatRequest {
   repeated string modules = 7;
 }
 message HeartbeatResponse {}
+
+message DisconnectRequest {}
+message DisconnectResponse {}
 
 // ─── Shared data types ───
 

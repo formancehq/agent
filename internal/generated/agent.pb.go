@@ -819,6 +819,78 @@ func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
 	return file_agent_proto_rawDescGZIP(), []int{15}
 }
 
+type DisconnectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisconnectRequest) Reset() {
+	*x = DisconnectRequest{}
+	mi := &file_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisconnectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisconnectRequest) ProtoMessage() {}
+
+func (x *DisconnectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisconnectRequest.ProtoReflect.Descriptor instead.
+func (*DisconnectRequest) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{16}
+}
+
+type DisconnectResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisconnectResponse) Reset() {
+	*x = DisconnectResponse{}
+	mi := &file_agent_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisconnectResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisconnectResponse) ProtoMessage() {}
+
+func (x *DisconnectResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisconnectResponse.ProtoReflect.Descriptor instead.
+func (*DisconnectResponse) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{17}
+}
+
 type Stack struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	ClusterName           string                 `protobuf:"bytes,1,opt,name=clusterName,proto3" json:"clusterName,omitempty"`
@@ -839,7 +911,7 @@ type Stack struct {
 
 func (x *Stack) Reset() {
 	*x = Stack{}
-	mi := &file_agent_proto_msgTypes[16]
+	mi := &file_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -851,7 +923,7 @@ func (x *Stack) String() string {
 func (*Stack) ProtoMessage() {}
 
 func (x *Stack) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[16]
+	mi := &file_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -864,7 +936,7 @@ func (x *Stack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stack.ProtoReflect.Descriptor instead.
 func (*Stack) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{16}
+	return file_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Stack) GetClusterName() string {
@@ -960,7 +1032,7 @@ type Module struct {
 
 func (x *Module) Reset() {
 	*x = Module{}
-	mi := &file_agent_proto_msgTypes[17]
+	mi := &file_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -972,7 +1044,7 @@ func (x *Module) String() string {
 func (*Module) ProtoMessage() {}
 
 func (x *Module) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[17]
+	mi := &file_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -985,7 +1057,7 @@ func (x *Module) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Module.ProtoReflect.Descriptor instead.
 func (*Module) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{17}
+	return file_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Module) GetName() string {
@@ -1005,7 +1077,7 @@ type VersionKind struct {
 
 func (x *VersionKind) Reset() {
 	*x = VersionKind{}
-	mi := &file_agent_proto_msgTypes[18]
+	mi := &file_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1017,7 +1089,7 @@ func (x *VersionKind) String() string {
 func (*VersionKind) ProtoMessage() {}
 
 func (x *VersionKind) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[18]
+	mi := &file_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1030,7 +1102,7 @@ func (x *VersionKind) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionKind.ProtoReflect.Descriptor instead.
 func (*VersionKind) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{18}
+	return file_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *VersionKind) GetVersion() string {
@@ -1058,7 +1130,7 @@ type ModuleStatusChanged struct {
 
 func (x *ModuleStatusChanged) Reset() {
 	*x = ModuleStatusChanged{}
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1070,7 +1142,7 @@ func (x *ModuleStatusChanged) String() string {
 func (*ModuleStatusChanged) ProtoMessage() {}
 
 func (x *ModuleStatusChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1083,7 +1155,7 @@ func (x *ModuleStatusChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModuleStatusChanged.ProtoReflect.Descriptor instead.
 func (*ModuleStatusChanged) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{19}
+	return file_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ModuleStatusChanged) GetClusterName() string {
@@ -1117,7 +1189,7 @@ type ModuleDeleted struct {
 
 func (x *ModuleDeleted) Reset() {
 	*x = ModuleDeleted{}
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1129,7 +1201,7 @@ func (x *ModuleDeleted) String() string {
 func (*ModuleDeleted) ProtoMessage() {}
 
 func (x *ModuleDeleted) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1142,7 +1214,7 @@ func (x *ModuleDeleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModuleDeleted.ProtoReflect.Descriptor instead.
 func (*ModuleDeleted) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{20}
+	return file_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ModuleDeleted) GetClusterName() string {
@@ -1171,7 +1243,7 @@ type StatusChanged struct {
 
 func (x *StatusChanged) Reset() {
 	*x = StatusChanged{}
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1183,7 +1255,7 @@ func (x *StatusChanged) String() string {
 func (*StatusChanged) ProtoMessage() {}
 
 func (x *StatusChanged) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1196,7 +1268,7 @@ func (x *StatusChanged) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusChanged.ProtoReflect.Descriptor instead.
 func (*StatusChanged) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{21}
+	return file_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *StatusChanged) GetClusterName() string {
@@ -1238,7 +1310,7 @@ type StargateConfig struct {
 
 func (x *StargateConfig) Reset() {
 	*x = StargateConfig{}
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1250,7 +1322,7 @@ func (x *StargateConfig) String() string {
 func (*StargateConfig) ProtoMessage() {}
 
 func (x *StargateConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1263,7 +1335,7 @@ func (x *StargateConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StargateConfig.ProtoReflect.Descriptor instead.
 func (*StargateConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{22}
+	return file_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *StargateConfig) GetEnabled() bool {
@@ -1296,7 +1368,7 @@ type DeletedStack struct {
 
 func (x *DeletedStack) Reset() {
 	*x = DeletedStack{}
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1308,7 +1380,7 @@ func (x *DeletedStack) String() string {
 func (*DeletedStack) ProtoMessage() {}
 
 func (x *DeletedStack) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1321,7 +1393,7 @@ func (x *DeletedStack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletedStack.ProtoReflect.Descriptor instead.
 func (*DeletedStack) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{23}
+	return file_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DeletedStack) GetClusterName() string {
@@ -1342,7 +1414,7 @@ type AuthConfig struct {
 
 func (x *AuthConfig) Reset() {
 	*x = AuthConfig{}
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1354,7 +1426,7 @@ func (x *AuthConfig) String() string {
 func (*AuthConfig) ProtoMessage() {}
 
 func (x *AuthConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1367,7 +1439,7 @@ func (x *AuthConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthConfig.ProtoReflect.Descriptor instead.
 func (*AuthConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{24}
+	return file_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AuthConfig) GetClientId() string {
@@ -1401,7 +1473,7 @@ type AuthClient struct {
 
 func (x *AuthClient) Reset() {
 	*x = AuthClient{}
-	mi := &file_agent_proto_msgTypes[25]
+	mi := &file_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1413,7 +1485,7 @@ func (x *AuthClient) String() string {
 func (*AuthClient) ProtoMessage() {}
 
 func (x *AuthClient) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[25]
+	mi := &file_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1426,7 +1498,7 @@ func (x *AuthClient) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthClient.ProtoReflect.Descriptor instead.
 func (*AuthClient) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{25}
+	return file_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AuthClient) GetPublic() bool {
@@ -1454,7 +1526,7 @@ type AddedVersion struct {
 
 func (x *AddedVersion) Reset() {
 	*x = AddedVersion{}
-	mi := &file_agent_proto_msgTypes[26]
+	mi := &file_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1466,7 +1538,7 @@ func (x *AddedVersion) String() string {
 func (*AddedVersion) ProtoMessage() {}
 
 func (x *AddedVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[26]
+	mi := &file_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1479,7 +1551,7 @@ func (x *AddedVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddedVersion.ProtoReflect.Descriptor instead.
 func (*AddedVersion) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{26}
+	return file_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AddedVersion) GetName() string {
@@ -1514,7 +1586,7 @@ type UpdatedVersion struct {
 
 func (x *UpdatedVersion) Reset() {
 	*x = UpdatedVersion{}
-	mi := &file_agent_proto_msgTypes[27]
+	mi := &file_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1526,7 +1598,7 @@ func (x *UpdatedVersion) String() string {
 func (*UpdatedVersion) ProtoMessage() {}
 
 func (x *UpdatedVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[27]
+	mi := &file_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1539,7 +1611,7 @@ func (x *UpdatedVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatedVersion.ProtoReflect.Descriptor instead.
 func (*UpdatedVersion) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{27}
+	return file_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdatedVersion) GetName() string {
@@ -1572,7 +1644,7 @@ type DeletedVersion struct {
 
 func (x *DeletedVersion) Reset() {
 	*x = DeletedVersion{}
-	mi := &file_agent_proto_msgTypes[28]
+	mi := &file_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1584,7 +1656,7 @@ func (x *DeletedVersion) String() string {
 func (*DeletedVersion) ProtoMessage() {}
 
 func (x *DeletedVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[28]
+	mi := &file_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1597,7 +1669,7 @@ func (x *DeletedVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletedVersion.ProtoReflect.Descriptor instead.
 func (*DeletedVersion) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{28}
+	return file_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *DeletedVersion) GetName() string {
@@ -1656,7 +1728,9 @@ const file_agent_proto_rawDesc = "" +
 	"production\x12\"\n" +
 	"\fcapabilities\x18\x06 \x03(\tR\fcapabilities\x12\x18\n" +
 	"\amodules\x18\a \x03(\tR\amodules\"\x13\n" +
-	"\x11HeartbeatResponse\"\xfc\x05\n" +
+	"\x11HeartbeatResponse\"\x13\n" +
+	"\x11DisconnectRequest\"\x14\n" +
+	"\x12DisconnectResponse\"\xfc\x05\n" +
 	"\x05Stack\x12 \n" +
 	"\vclusterName\x18\x01 \x01(\tR\vclusterName\x12\x12\n" +
 	"\x04seed\x18\x02 \x01(\tR\x04seed\x122\n" +
@@ -1739,7 +1813,7 @@ const file_agent_proto_rawDesc = "" +
 	"\vProgressing\x10\x00\x12\t\n" +
 	"\x05Ready\x10\x01\x12\v\n" +
 	"\aDeleted\x10\x02\x12\f\n" +
-	"\bDisabled\x10\x032\xa5\x05\n" +
+	"\bDisabled\x10\x032\xea\x05\n" +
 	"\fAgentService\x12C\n" +
 	"\n" +
 	"ListStacks\x12\x19.server.ListStacksRequest\x1a\x1a.server.ListStacksResponse\x12X\n" +
@@ -1749,7 +1823,9 @@ const file_agent_proto_rawDesc = "" +
 	"\x13ReportModuleDeleted\x12\".server.ReportModuleDeletedRequest\x1a#.server.ReportModuleDeletedResponse\x12L\n" +
 	"\rUpsertVersion\x12\x1c.server.UpsertVersionRequest\x1a\x1d.server.UpsertVersionResponse\x12L\n" +
 	"\rDeleteVersion\x12\x1c.server.DeleteVersionRequest\x1a\x1d.server.DeleteVersionResponse\x12@\n" +
-	"\tHeartbeat\x12\x18.server.HeartbeatRequest\x1a\x19.server.HeartbeatResponseB:Z8github.com/formancehq/membership/internal/grpc/generatedb\x06proto3"
+	"\tHeartbeat\x12\x18.server.HeartbeatRequest\x1a\x19.server.HeartbeatResponse\x12C\n" +
+	"\n" +
+	"Disconnect\x12\x19.server.DisconnectRequest\x1a\x1a.server.DisconnectResponseB:Z8github.com/formancehq/membership/internal/grpc/generatedb\x06proto3"
 
 var (
 	file_agent_proto_rawDescOnce sync.Once
@@ -1764,7 +1840,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_agent_proto_goTypes = []any{
 	(StackStatus)(0),                    // 0: server.StackStatus
 	(*ListStacksRequest)(nil),           // 1: server.ListStacksRequest
@@ -1783,49 +1859,51 @@ var file_agent_proto_goTypes = []any{
 	(*DeleteVersionResponse)(nil),       // 14: server.DeleteVersionResponse
 	(*HeartbeatRequest)(nil),            // 15: server.HeartbeatRequest
 	(*HeartbeatResponse)(nil),           // 16: server.HeartbeatResponse
-	(*Stack)(nil),                       // 17: server.Stack
-	(*Module)(nil),                      // 18: server.Module
-	(*VersionKind)(nil),                 // 19: server.VersionKind
-	(*ModuleStatusChanged)(nil),         // 20: server.ModuleStatusChanged
-	(*ModuleDeleted)(nil),               // 21: server.ModuleDeleted
-	(*StatusChanged)(nil),               // 22: server.StatusChanged
-	(*StargateConfig)(nil),              // 23: server.StargateConfig
-	(*DeletedStack)(nil),                // 24: server.DeletedStack
-	(*AuthConfig)(nil),                  // 25: server.AuthConfig
-	(*AuthClient)(nil),                  // 26: server.AuthClient
-	(*AddedVersion)(nil),                // 27: server.AddedVersion
-	(*UpdatedVersion)(nil),              // 28: server.UpdatedVersion
-	(*DeletedVersion)(nil),              // 29: server.DeletedVersion
-	nil,                                 // 30: server.UpsertVersionRequest.VersionsEntry
-	nil,                                 // 31: server.Stack.AdditionalLabelsEntry
-	nil,                                 // 32: server.Stack.AdditionalAnnotationsEntry
-	nil,                                 // 33: server.AddedVersion.VersionsEntry
-	nil,                                 // 34: server.UpdatedVersion.VersionsEntry
-	(*timestamppb.Timestamp)(nil),       // 35: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),             // 36: google.protobuf.Struct
+	(*DisconnectRequest)(nil),           // 17: server.DisconnectRequest
+	(*DisconnectResponse)(nil),          // 18: server.DisconnectResponse
+	(*Stack)(nil),                       // 19: server.Stack
+	(*Module)(nil),                      // 20: server.Module
+	(*VersionKind)(nil),                 // 21: server.VersionKind
+	(*ModuleStatusChanged)(nil),         // 22: server.ModuleStatusChanged
+	(*ModuleDeleted)(nil),               // 23: server.ModuleDeleted
+	(*StatusChanged)(nil),               // 24: server.StatusChanged
+	(*StargateConfig)(nil),              // 25: server.StargateConfig
+	(*DeletedStack)(nil),                // 26: server.DeletedStack
+	(*AuthConfig)(nil),                  // 27: server.AuthConfig
+	(*AuthClient)(nil),                  // 28: server.AuthClient
+	(*AddedVersion)(nil),                // 29: server.AddedVersion
+	(*UpdatedVersion)(nil),              // 30: server.UpdatedVersion
+	(*DeletedVersion)(nil),              // 31: server.DeletedVersion
+	nil,                                 // 32: server.UpsertVersionRequest.VersionsEntry
+	nil,                                 // 33: server.Stack.AdditionalLabelsEntry
+	nil,                                 // 34: server.Stack.AdditionalAnnotationsEntry
+	nil,                                 // 35: server.AddedVersion.VersionsEntry
+	nil,                                 // 36: server.UpdatedVersion.VersionsEntry
+	(*timestamppb.Timestamp)(nil),       // 37: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),             // 38: google.protobuf.Struct
 }
 var file_agent_proto_depIdxs = []int32{
-	17, // 0: server.ListStacksResponse.stacks:type_name -> server.Stack
-	22, // 1: server.ReportStackStatusRequest.status_changed:type_name -> server.StatusChanged
-	24, // 2: server.ReportStackDeletedRequest.stack_deleted:type_name -> server.DeletedStack
-	20, // 3: server.ReportModuleStatusRequest.module_status_changed:type_name -> server.ModuleStatusChanged
-	21, // 4: server.ReportModuleDeletedRequest.module_deleted:type_name -> server.ModuleDeleted
-	30, // 5: server.UpsertVersionRequest.versions:type_name -> server.UpsertVersionRequest.VersionsEntry
-	25, // 6: server.Stack.authConfig:type_name -> server.AuthConfig
-	26, // 7: server.Stack.staticClients:type_name -> server.AuthClient
-	23, // 8: server.Stack.stargateConfig:type_name -> server.StargateConfig
-	31, // 9: server.Stack.additionalLabels:type_name -> server.Stack.AdditionalLabelsEntry
-	32, // 10: server.Stack.additionalAnnotations:type_name -> server.Stack.AdditionalAnnotationsEntry
-	18, // 11: server.Stack.modules:type_name -> server.Module
-	35, // 12: server.Stack.updated_at:type_name -> google.protobuf.Timestamp
-	36, // 13: server.ModuleStatusChanged.status:type_name -> google.protobuf.Struct
-	19, // 14: server.ModuleStatusChanged.vk:type_name -> server.VersionKind
-	19, // 15: server.ModuleDeleted.vk:type_name -> server.VersionKind
+	19, // 0: server.ListStacksResponse.stacks:type_name -> server.Stack
+	24, // 1: server.ReportStackStatusRequest.status_changed:type_name -> server.StatusChanged
+	26, // 2: server.ReportStackDeletedRequest.stack_deleted:type_name -> server.DeletedStack
+	22, // 3: server.ReportModuleStatusRequest.module_status_changed:type_name -> server.ModuleStatusChanged
+	23, // 4: server.ReportModuleDeletedRequest.module_deleted:type_name -> server.ModuleDeleted
+	32, // 5: server.UpsertVersionRequest.versions:type_name -> server.UpsertVersionRequest.VersionsEntry
+	27, // 6: server.Stack.authConfig:type_name -> server.AuthConfig
+	28, // 7: server.Stack.staticClients:type_name -> server.AuthClient
+	25, // 8: server.Stack.stargateConfig:type_name -> server.StargateConfig
+	33, // 9: server.Stack.additionalLabels:type_name -> server.Stack.AdditionalLabelsEntry
+	34, // 10: server.Stack.additionalAnnotations:type_name -> server.Stack.AdditionalAnnotationsEntry
+	20, // 11: server.Stack.modules:type_name -> server.Module
+	37, // 12: server.Stack.updated_at:type_name -> google.protobuf.Timestamp
+	38, // 13: server.ModuleStatusChanged.status:type_name -> google.protobuf.Struct
+	21, // 14: server.ModuleStatusChanged.vk:type_name -> server.VersionKind
+	21, // 15: server.ModuleDeleted.vk:type_name -> server.VersionKind
 	0,  // 16: server.StatusChanged.status:type_name -> server.StackStatus
-	36, // 17: server.StatusChanged.statuses:type_name -> google.protobuf.Struct
-	19, // 18: server.StatusChanged.vk:type_name -> server.VersionKind
-	33, // 19: server.AddedVersion.versions:type_name -> server.AddedVersion.VersionsEntry
-	34, // 20: server.UpdatedVersion.versions:type_name -> server.UpdatedVersion.VersionsEntry
+	38, // 17: server.StatusChanged.statuses:type_name -> google.protobuf.Struct
+	21, // 18: server.StatusChanged.vk:type_name -> server.VersionKind
+	35, // 19: server.AddedVersion.versions:type_name -> server.AddedVersion.VersionsEntry
+	36, // 20: server.UpdatedVersion.versions:type_name -> server.UpdatedVersion.VersionsEntry
 	1,  // 21: server.AgentService.ListStacks:input_type -> server.ListStacksRequest
 	3,  // 22: server.AgentService.ReportStackStatus:input_type -> server.ReportStackStatusRequest
 	5,  // 23: server.AgentService.ReportStackDeleted:input_type -> server.ReportStackDeletedRequest
@@ -1834,16 +1912,18 @@ var file_agent_proto_depIdxs = []int32{
 	11, // 26: server.AgentService.UpsertVersion:input_type -> server.UpsertVersionRequest
 	13, // 27: server.AgentService.DeleteVersion:input_type -> server.DeleteVersionRequest
 	15, // 28: server.AgentService.Heartbeat:input_type -> server.HeartbeatRequest
-	2,  // 29: server.AgentService.ListStacks:output_type -> server.ListStacksResponse
-	4,  // 30: server.AgentService.ReportStackStatus:output_type -> server.ReportStackStatusResponse
-	6,  // 31: server.AgentService.ReportStackDeleted:output_type -> server.ReportStackDeletedResponse
-	8,  // 32: server.AgentService.ReportModuleStatus:output_type -> server.ReportModuleStatusResponse
-	10, // 33: server.AgentService.ReportModuleDeleted:output_type -> server.ReportModuleDeletedResponse
-	12, // 34: server.AgentService.UpsertVersion:output_type -> server.UpsertVersionResponse
-	14, // 35: server.AgentService.DeleteVersion:output_type -> server.DeleteVersionResponse
-	16, // 36: server.AgentService.Heartbeat:output_type -> server.HeartbeatResponse
-	29, // [29:37] is the sub-list for method output_type
-	21, // [21:29] is the sub-list for method input_type
+	17, // 29: server.AgentService.Disconnect:input_type -> server.DisconnectRequest
+	2,  // 30: server.AgentService.ListStacks:output_type -> server.ListStacksResponse
+	4,  // 31: server.AgentService.ReportStackStatus:output_type -> server.ReportStackStatusResponse
+	6,  // 32: server.AgentService.ReportStackDeleted:output_type -> server.ReportStackDeletedResponse
+	8,  // 33: server.AgentService.ReportModuleStatus:output_type -> server.ReportModuleStatusResponse
+	10, // 34: server.AgentService.ReportModuleDeleted:output_type -> server.ReportModuleDeletedResponse
+	12, // 35: server.AgentService.UpsertVersion:output_type -> server.UpsertVersionResponse
+	14, // 36: server.AgentService.DeleteVersion:output_type -> server.DeleteVersionResponse
+	16, // 37: server.AgentService.Heartbeat:output_type -> server.HeartbeatResponse
+	18, // 38: server.AgentService.Disconnect:output_type -> server.DisconnectResponse
+	30, // [30:39] is the sub-list for method output_type
+	21, // [21:30] is the sub-list for method input_type
 	21, // [21:21] is the sub-list for extension type_name
 	21, // [21:21] is the sub-list for extension extendee
 	0,  // [0:21] is the sub-list for field type_name
@@ -1860,7 +1940,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   34,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
