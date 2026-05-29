@@ -1,2 +1,2 @@
-deployment/pulumi/bin/
-deployment/pulumi/pulumi
+bin/
+pulumi
