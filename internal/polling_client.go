@@ -154,7 +154,12 @@ func (p *pollingClient) poll(ctx context.Context, isFullSync bool) error {
 		}
 
 		if !resp.GetHasMore() {
-			p.cursor = resp.GetNextCursor()
+			// Only update cursor if the server returned one.
+			// An empty cursor means no results — keep the previous cursor
+			// to avoid re-scanning from the beginning.
+			if next := resp.GetNextCursor(); next != "" {
+				p.cursor = next
+			}
 			break
 		}
 		cursor = resp.GetNextCursor()
