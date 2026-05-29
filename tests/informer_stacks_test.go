@@ -322,15 +322,10 @@ var _ = Describe("Stacks informer", func() {
 
 			startListener()
 
-			// Wait for the informer to see the stack (AddFunc) before deleting
-			Eventually(func() bool {
-				for _, event := range reporterMock.GetEvents() {
-					if event.Type == "StackStatus" && event.ClusterName == stack.Name {
-						return true
-					}
-				}
-				return false
-			}).Should(BeTrue())
+			// Wait for the informer cache to sync and see the stack before deleting.
+			// A newly created stack may not have a status yet, so the AddFunc won't
+			// emit a StackStatus event. We wait briefly for the informer cache to sync.
+			time.Sleep(2 * time.Second)
 
 			Expect(k8sClient.Delete().
 				Resource("Stacks").
