@@ -227,6 +227,62 @@ var _ = Describe("Membership listener", func() {
 				Expect(u).To(TargetStack(stack))
 			}
 		})
+		It("Should default versionsFromFile to 'default' when empty", func() {
+			s := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+			versionsFromFile, _, _ := unstructured.NestedString(s.Object, "spec", "versionsFromFile")
+			Expect(versionsFromFile).To(Equal("default"))
+		})
+		It("Should use the SSA field manager 'formance-agent'", func() {
+			s := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+
+			managedFields := s.GetManagedFields()
+			found := false
+			for _, mf := range managedFields {
+				if mf.Manager == "formance-agent" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected managedFields to contain 'formance-agent'")
+		})
+		It("Should be idempotent on resync", func() {
+			s1 := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s1)).To(Succeed())
+			rv1 := s1.GetResourceVersion()
+
+			membershipClient.Orders() <- &generated.Order{
+				Message: &generated.Order_ExistingStack{
+					ExistingStack: membershipStack,
+				},
+			}
+
+			// Give the agent time to process the order
+			Consistently(func(g Gomega) {
+				s2 := &unstructured.Unstructured{}
+				g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s2)).To(Succeed())
+				g.Expect(s2.GetResourceVersion()).To(Equal(rv1))
+			}, "2s", "200ms").Should(Succeed())
+		})
+		When("versions is set explicitly", func() {
+			BeforeEach(func() {
+				membershipStack.Versions = "v1.2.3"
+				membershipClient.Orders() <- &generated.Order{
+					Message: &generated.Order_ExistingStack{
+						ExistingStack: membershipStack,
+					},
+				}
+			})
+			It("Should use the explicit version", func() {
+				Eventually(func(g Gomega) {
+					s := &unstructured.Unstructured{}
+					g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+					versionsFromFile, _, _ := unstructured.NestedString(s.Object, "spec", "versionsFromFile")
+					g.Expect(versionsFromFile).To(Equal("v1.2.3"))
+				}).Should(Succeed())
+			})
+		})
 		When("a user manually edits a resource managed by the agent", func() {
 			It("Should preserve user-added annotations after resync", func() {
 				userPatch, err := json.Marshal(map[string]any{
