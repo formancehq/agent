@@ -2,6 +2,8 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
@@ -19,8 +21,7 @@ import (
 
 type K8SClient interface {
 	Get(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error)
-	Create(ctx context.Context, resource string, o *unstructured.Unstructured) error
-	Patch(ctx context.Context, resource, name string, body []byte) error
+	Apply(ctx context.Context, resource string, obj *unstructured.Unstructured, fieldManager string, force bool) (*unstructured.Unstructured, error)
 	Delete(ctx context.Context, resource, name string) error
 	EnsureNotExists(ctx context.Context, resource, name string) error
 	EnsureNotExistsBySelector(ctx context.Context, resource string, selector labels.Selector) error
@@ -43,22 +44,24 @@ func (c defaultK8SClient) Get(ctx context.Context, resource string, name string)
 	return u, nil
 }
 
-func (c defaultK8SClient) Create(ctx context.Context, resource string, o *unstructured.Unstructured) error {
-	return c.restClient.
-		Post().
+func (c defaultK8SClient) Apply(ctx context.Context, resource string, obj *unstructured.Unstructured, fieldManager string, force bool) (*unstructured.Unstructured, error) {
+	data, err := json.Marshal(obj.Object)
+	if err != nil {
+		return nil, err
+	}
+	result := &unstructured.Unstructured{}
+	err = c.restClient.Patch(types.ApplyPatchType).
 		Resource(resource).
-		Body(o).
+		Name(obj.GetName()).
+		Param("fieldManager", fieldManager).
+		Param("force", fmt.Sprintf("%t", force)).
+		Body(data).
 		Do(ctx).
-		Into(o)
-}
-
-func (c defaultK8SClient) Patch(ctx context.Context, resource, name string, body []byte) error {
-	return c.restClient.Patch(types.MergePatchType).
-		Name(name).
-		Body(body).
-		Resource(resource).
-		Do(ctx).
-		Error()
+		Into(result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (c defaultK8SClient) Delete(ctx context.Context, resource, name string) error {

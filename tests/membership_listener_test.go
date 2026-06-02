@@ -227,6 +227,128 @@ var _ = Describe("Membership listener", func() {
 				Expect(u).To(TargetStack(stack))
 			}
 		})
+		It("Should default versionsFromFile to 'default' when empty", func() {
+			s := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+			versionsFromFile, _, _ := unstructured.NestedString(s.Object, "spec", "versionsFromFile")
+			Expect(versionsFromFile).To(Equal("default"))
+		})
+		It("Should use the SSA field manager 'formance-agent'", func() {
+			s := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+
+			managedFields := s.GetManagedFields()
+			found := false
+			for _, mf := range managedFields {
+				if mf.Manager == "formance-agent" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected managedFields to contain 'formance-agent'")
+		})
+		It("Should be idempotent on resync", func() {
+			s1 := &unstructured.Unstructured{}
+			Expect(LoadResource("Stacks", membershipStack.ClusterName, s1)).To(Succeed())
+			rv1 := s1.GetResourceVersion()
+
+			membershipClient.Orders() <- &generated.Order{
+				Message: &generated.Order_ExistingStack{
+					ExistingStack: membershipStack,
+				},
+			}
+
+			// Give the agent time to process the order
+			Consistently(func(g Gomega) {
+				s2 := &unstructured.Unstructured{}
+				g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s2)).To(Succeed())
+				g.Expect(s2.GetResourceVersion()).To(Equal(rv1))
+			}, "2s", "200ms").Should(Succeed())
+		})
+		When("versions is set explicitly", func() {
+			BeforeEach(func() {
+				membershipStack.Versions = "v1.2.3"
+				membershipClient.Orders() <- &generated.Order{
+					Message: &generated.Order_ExistingStack{
+						ExistingStack: membershipStack,
+					},
+				}
+			})
+			It("Should use the explicit version", func() {
+				Eventually(func(g Gomega) {
+					s := &unstructured.Unstructured{}
+					g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+					versionsFromFile, _, _ := unstructured.NestedString(s.Object, "spec", "versionsFromFile")
+					g.Expect(versionsFromFile).To(Equal("v1.2.3"))
+				}).Should(Succeed())
+			})
+		})
+		When("a user manually edits a resource managed by the agent", func() {
+			It("Should preserve user-added annotations after resync", func() {
+				userPatch, err := json.Marshal(map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"user-custom/annotation": "user-value",
+						},
+					},
+				})
+				Expect(err).To(BeNil())
+				Expect(k8sClient.Patch(types.MergePatchType).
+					Resource("Stacks").
+					Name(membershipStack.ClusterName).
+					Body(userPatch).
+					Do(context.Background()).
+					Error()).To(Succeed())
+
+				membershipClient.Orders() <- &generated.Order{
+					Message: &generated.Order_ExistingStack{
+						ExistingStack: membershipStack,
+					},
+				}
+
+				Eventually(func(g Gomega) {
+					s := &unstructured.Unstructured{}
+					g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+					g.Expect(s.GetAnnotations()).To(HaveKeyWithValue("user-custom/annotation", "user-value"))
+					versionsFromFile, _, _ := unstructured.NestedString(s.Object, "spec", "versionsFromFile")
+					g.Expect(versionsFromFile).To(Equal("default"))
+				}).Should(Succeed())
+			})
+
+			It("Should preserve user-added annotations on modules after resync", func() {
+				auth := &unstructured.Unstructured{}
+				Eventually(func() error {
+					return LoadResource("Auths", membershipStack.ClusterName, auth)
+				}).Should(BeNil())
+
+				userPatch, err := json.Marshal(map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							"user-custom/note": "do not delete",
+						},
+					},
+				})
+				Expect(err).To(BeNil())
+				Expect(k8sClient.Patch(types.MergePatchType).
+					Resource("Auths").
+					Name(membershipStack.ClusterName).
+					Body(userPatch).
+					Do(context.Background()).
+					Error()).To(Succeed())
+
+				membershipClient.Orders() <- &generated.Order{
+					Message: &generated.Order_ExistingStack{
+						ExistingStack: membershipStack,
+					},
+				}
+
+				Eventually(func(g Gomega) {
+					a := &unstructured.Unstructured{}
+					g.Expect(LoadResource("Auths", membershipStack.ClusterName, a)).To(Succeed())
+					g.Expect(a.GetAnnotations()).To(HaveKeyWithValue("user-custom/note", "do not delete"))
+				}).Should(Succeed())
+			})
+		})
 		When("removing modules", func() {
 			var (
 				modulesToRemove map[string]struct{}
