@@ -3,14 +3,12 @@ package internal
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -18,21 +16,27 @@ func TestEnsureNotExistBySelector(t *testing.T) {
 	test(t, func(ctx context.Context, testConfig *testConfig) {
 		k8sClient := NewDefaultK8SClient(testConfig.client)
 
-		for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
-			gvk := gvk
+		moduleCRDs, _, err := RetrieveModuleList(ctx, testConfig.restConfig)
+		require.NoError(t, err)
 
-			object := reflect.New(rtype).Interface()
-			if _, ok := object.(v1beta1.Module); !ok {
-				continue
+		for _, crd := range moduleCRDs {
+			crd := crd
+			kind := crd.Spec.Names.Kind
+			resource := crd.Status.AcceptedNames.Plural
+			version := crd.Spec.Versions[0].Name
+			gvk := schema.GroupVersionKind{
+				Group:   crd.Spec.Group,
+				Version: version,
+				Kind:    kind,
 			}
 
-			t.Run(fmt.Sprintf("EnsureNotExistBySelector %s", gvk.Kind), func(t *testing.T) {
+			t.Run(fmt.Sprintf("EnsureNotExistBySelector %s", kind), func(t *testing.T) {
 				t.Parallel()
 				name := uuid.NewString()
 				module := unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": gvk.GroupVersion().String(),
-						"kind":       gvk.Kind,
+						"kind":       kind,
 						"metadata": map[string]interface{}{
 							"name": name,
 							"labels": map[string]interface{}{
@@ -43,15 +47,11 @@ func TestEnsureNotExistBySelector(t *testing.T) {
 					},
 				}
 
-				resources, err := testConfig.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-				require.NoError(t, err)
+				require.NoError(t, testConfig.client.Post().Resource(resource).Body(&module).Do(ctx).Error())
 
-				require.NoError(t, testConfig.client.Post().Resource(resources.Resource.Resource).Body(&module).Do(ctx).Error())
-
-				require.NoError(t, k8sClient.EnsureNotExistsBySelector(ctx, resources.Resource.Resource, stackLabels(module.GetName())))
-				require.NoError(t, client.IgnoreNotFound(testConfig.client.Get().Resource(resources.Resource.Resource).Name(module.GetName()).Do(ctx).Error()))
+				require.NoError(t, k8sClient.EnsureNotExistsBySelector(ctx, resource, stackLabels(module.GetName())))
+				require.NoError(t, client.IgnoreNotFound(testConfig.client.Get().Resource(resource).Name(module.GetName()).Do(ctx).Error()))
 			})
-
 		}
 	})
 }

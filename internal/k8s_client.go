@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -84,7 +83,7 @@ func (c defaultK8SClient) EnsureNotExistsBySelector(ctx context.Context, resourc
 			VersionedParams(
 				&metav1.ListOptions{
 					LabelSelector: selector.String(),
-				}, scheme.ParameterCodec).
+				}, metav1.ParameterCodec).
 			Do(ctx).
 			Error(),
 	)
@@ -96,7 +95,7 @@ func (c defaultK8SClient) List(ctx context.Context, resource string, add labels.
 		Resource(resource).
 		VersionedParams(&metav1.ListOptions{
 			LabelSelector: add.String(),
-		}, scheme.ParameterCodec).
+		}, metav1.ParameterCodec).
 		Do(ctx).
 		Into(list); err != nil {
 		return nil, err

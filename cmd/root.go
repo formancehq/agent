@@ -16,7 +16,6 @@ import (
 	"github.com/formancehq/go-libs/v2/otlp"
 	"github.com/formancehq/go-libs/v2/otlp/otlptraces"
 	"github.com/formancehq/go-libs/v2/service"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -24,7 +23,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/transport"
 	"k8s.io/client-go/util/homedir"
 )
@@ -60,10 +58,6 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	if err := v1beta1.AddToScheme(scheme.Scheme); err != nil {
-		panic(err)
-	}
-
 	var kubeConfigFilePath string
 	if home := homedir.HomeDir(); home != "" {
 		kubeConfigFilePath = filepath.Join(home, ".kube", "config")

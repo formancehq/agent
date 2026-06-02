@@ -4,37 +4,40 @@ import (
 	"reflect"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func convertUnstructured[T client.Object](v any) T {
-	var t T
-	t = reflect.New(reflect.TypeOf(t).Elem()).Interface().(T)
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(
-		v.(*unstructured.Unstructured).Object, t); err != nil {
-		panic(err)
+// extractVersionsSpec extracts the .spec field from an unstructured Versions
+// resource as map[string]string. The Versions CRD spec is simply a map of
+// module name → image tag.
+func extractVersionsSpec(obj *unstructured.Unstructured) map[string]string {
+	spec, _, _ := unstructured.NestedMap(obj.Object, "spec")
+	if spec == nil {
+		return nil
 	}
-	return t
+	result := make(map[string]string, len(spec))
+	for k, v := range spec {
+		if s, ok := v.(string); ok {
+			result[k] = s
+		}
+	}
+	return result
 }
 
 func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClient) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			version := obj.(*unstructured.Unstructured)
 
-			version := convertUnstructured[*v1beta1.Versions](obj)
-
-			logger.Infof("Detect versions '%s' added", version.Name)
+			logger.Infof("Detect versions '%s' added", version.GetName())
 			if err := membershipClient.Send(&generated.Message{
 				Message: &generated.Message_AddedVersion{
 					AddedVersion: &generated.AddedVersion{
-						Name:       version.Name,
-						Versions:   version.Spec,
-						Deprecated: version.Annotations["formance.com/deprecated"] == "true",
+						Name:       version.GetName(),
+						Versions:   extractVersionsSpec(version),
+						Deprecated: version.GetAnnotations()["formance.com/deprecated"] == "true",
 					},
 				},
 			}); err != nil {
@@ -42,21 +45,23 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldVersions := oldObj.(*unstructured.Unstructured)
+			newVersions := newObj.(*unstructured.Unstructured)
 
-			oldVersions := convertUnstructured[*v1beta1.Versions](oldObj)
-			newVersions := convertUnstructured[*v1beta1.Versions](newObj)
+			oldSpec := extractVersionsSpec(oldVersions)
+			newSpec := extractVersionsSpec(newVersions)
 
-			if reflect.DeepEqual(oldVersions.Spec, newVersions.Spec) {
+			if reflect.DeepEqual(oldSpec, newSpec) {
 				return
 			}
 
-			logger.Infof("Detect versions '%s' modified", newVersions.Name)
+			logger.Infof("Detect versions '%s' modified", newVersions.GetName())
 			if err := membershipClient.Send(&generated.Message{
 				Message: &generated.Message_UpdatedVersion{
 					UpdatedVersion: &generated.UpdatedVersion{
-						Name:       newVersions.Name,
-						Versions:   newVersions.Spec,
-						Deprecated: newVersions.Annotations["formance.com/deprecated"] == "true",
+						Name:       newVersions.GetName(),
+						Versions:   newSpec,
+						Deprecated: newVersions.GetAnnotations()["formance.com/deprecated"] == "true",
 					},
 				},
 			}); err != nil {
@@ -64,13 +69,13 @@ func VersionsEventHandler(logger logging.Logger, membershipClient MembershipClie
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			version := convertUnstructured[*v1beta1.Versions](obj)
+			version := obj.(*unstructured.Unstructured)
 
-			logger.Infof("Detect versions '%s' as deleted", version.Name)
+			logger.Infof("Detect versions '%s' as deleted", version.GetName())
 			if err := membershipClient.Send(&generated.Message{
 				Message: &generated.Message_DeletedVersion{
 					DeletedVersion: &generated.DeletedVersion{
-						Name: version.Name,
+						Name: version.GetName(),
 					},
 				},
 			}); err != nil {

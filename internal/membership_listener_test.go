@@ -12,7 +12,6 @@ import (
 	v1apis "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -20,11 +19,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
+
+var formanceGV = schema.GroupVersion{Group: "formance.com", Version: "v1beta1"}
 
 type testConfig struct {
 	restConfig *rest.Config
@@ -38,7 +40,6 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 	apiServer.Configure().
 		Set("service-cluster-ip-range", "10.0.0.0/20")
 
-	require.NoError(t, v1beta1.AddToScheme(scheme.Scheme))
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join(filepath.Dir(filename), "..", "dist", "operator",
@@ -48,14 +49,13 @@ func test(t *testing.T, fn func(context.Context, *testConfig)) {
 		ControlPlane: envtest.ControlPlane{
 			APIServer: &apiServer,
 		},
-		Scheme: scheme.Scheme,
 	}
 
 	restConfig, err := testEnv.Start()
 
 	require.NoError(t, err)
 
-	restConfig.GroupVersion = &v1beta1.GroupVersion
+	restConfig.GroupVersion = &formanceGV
 	restConfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	restConfig.APIPath = "/apis"
 
@@ -100,34 +100,38 @@ func TestDeleteModule(t *testing.T) {
 			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				stackName := uuid.NewString()
-				recon := v1beta1.Reconciliation{
-					ObjectMeta: v1.ObjectMeta{
-						Name: uuid.NewString(),
+				recon := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": formanceGV.String(),
+						"kind":       "Reconciliation",
+						"metadata": map[string]interface{}{
+							"name": uuid.NewString(),
+						},
 					},
 				}
 				if tc.withLabels {
-					recon.Labels = map[string]string{
+					recon.SetLabels(map[string]string{
 						"formance.com/created-by-agent": "true",
 						"formance.com/stack":            stackName,
-					}
+					})
 				}
 
-				gvk := v1beta1.GroupVersion.WithKind("Reconciliation")
+				gvk := formanceGV.WithKind("Reconciliation")
 				resources, err := testConfig.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 				require.NoError(t, err)
 
-				require.NoError(t, testConfig.client.Post().Resource(resources.Resource.Resource).Body(&recon).Do(ctx).Error())
+				require.NoError(t, testConfig.client.Post().Resource(resources.Resource.Resource).Body(recon).Do(ctx).Error())
 				orders := NewMembershipClientMock()
 
 				membershipListener := NewMembershipListener(NewDefaultK8SClient(testConfig.client), ClientInfo{}, testConfig.mapper, orders, []v1apis.CustomResourceDefinition{})
 
 				if tc.withLabels {
 					require.NoError(t, membershipListener.deleteModule(ctx, logging.Testing(), resources.Resource.Resource, stackName))
-					require.Error(t, testConfig.client.Get().Resource(resources.Resource.Resource).Name(recon.Name).Do(ctx).Error())
+					require.Error(t, testConfig.client.Get().Resource(resources.Resource.Resource).Name(recon.GetName()).Do(ctx).Error())
 				}
 
 				if !tc.withLabels {
-					require.NoError(t, testConfig.client.Get().Resource(resources.Resource.Resource).Name(recon.Name).Do(ctx).Error())
+					require.NoError(t, testConfig.client.Get().Resource(resources.Resource.Resource).Name(recon.GetName()).Do(ctx).Error())
 				}
 			})
 		}
@@ -147,30 +151,34 @@ func TestRetrieveModuleList(t *testing.T) {
 	})
 }
 func TestSyncAuthClients(t *testing.T) {
-	newStaticClient := func(stackName string) *v1beta1.AuthClient {
-		return &v1beta1.AuthClient{
-			ObjectMeta: v1.ObjectMeta{
-				Name: uuid.NewString(),
-				Labels: map[string]string{
-					"formance.com/created-by-agent": "true",
-					"formance.com/stack":            stackName,
-				},
-			},
-		}
-
-	}
-
 	letter := []rune("abcdefghijklmnopqrstuvwxyz")
-	rand := func(i int) string {
+	randStr := func(i int) string {
 		b := make([]rune, i)
 		for i := range b {
 			b[i] = letter[rand.Intn(len(letter))]
 		}
 		return string(b)
 	}
+
+	newStaticClient := func(stackName string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": formanceGV.String(),
+				"kind":       "AuthClient",
+				"metadata": map[string]interface{}{
+					"name": uuid.NewString(),
+					"labels": map[string]interface{}{
+						"formance.com/created-by-agent": "true",
+						"formance.com/stack":            stackName,
+					},
+				},
+			},
+		}
+	}
+
 	newGeneratedClient := func() *generated.AuthClient {
 		return &generated.AuthClient{
-			Id:     rand(4),
+			Id:     randStr(4),
 			Public: true,
 		}
 	}
@@ -178,10 +186,10 @@ func TestSyncAuthClients(t *testing.T) {
 		t.Parallel()
 		listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
 
-		stackName := uuid.NewString() + "-" + rand(4)
+		stackName := uuid.NewString() + "-" + randStr(4)
 		stackuid := uuid.NewString()
 
-		authClientToRemove := []*v1beta1.AuthClient{
+		authClientsToRemove := []*unstructured.Unstructured{
 			newStaticClient(stackName),
 			newStaticClient(stackName),
 			newStaticClient(stackName),
@@ -196,18 +204,20 @@ func TestSyncAuthClients(t *testing.T) {
 		stack.SetName(stackName)
 		stack.SetUID(types.UID(stackuid))
 
-		for _, client := range authClientToRemove {
+		for _, client := range authClientsToRemove {
 			require.NoError(t, tc.client.Post().Resource("AuthClients").Body(client).Do(ctx).Error())
 		}
 
 		listener.syncAuthClients(ctx, map[string]any{}, stack, clients)
 
-		clientsList := &v1beta1.AuthClientList{}
+		clientsList := &unstructured.UnstructuredList{}
 		require.Eventually(t, func() bool {
-			require.NoError(t, tc.client.Get().Resource("AuthClients").Do(ctx).Into(clientsList))
+			err := tc.client.Get().Resource("AuthClients").
+				VersionedParams(&v1.ListOptions{}, v1.ParameterCodec).
+				Do(ctx).Into(clientsList)
+			require.NoError(t, err)
 			return len(clientsList.Items) == len(clients)
 		}, 5*time.Second, 500*time.Millisecond)
-
 	})
 }
 
@@ -216,7 +226,7 @@ func TestSyncStargate(t *testing.T) {
 		enabled bool
 	}
 	letter := []rune("abcdefghijklmnopqrstuvwxyz")
-	rand := func(i int) string {
+	randStr := func(i int) string {
 		b := make([]rune, i)
 		for i := range b {
 			b[i] = letter[rand.Intn(len(letter))]
@@ -235,7 +245,7 @@ func TestSyncStargate(t *testing.T) {
 				t.Parallel()
 				listener := NewMembershipListener(NewDefaultK8SClient(tc.client), ClientInfo{}, tc.mapper, NewMembershipClientMock(), []v1apis.CustomResourceDefinition{})
 
-				stackName := uuid.NewString() + "-" + rand(4)
+				stackName := uuid.NewString() + "-" + randStr(4)
 				stackuid := uuid.NewString()
 				stack := &unstructured.Unstructured{}
 				stack.SetName(stackName)
@@ -250,10 +260,12 @@ func TestSyncStargate(t *testing.T) {
 					AuthConfig:     &generated.AuthConfig{},
 					StargateConfig: stargateConfig,
 				})
-				fStargate := &v1beta1.Stargate{}
+				fStargate := &unstructured.Unstructured{}
 				require.Eventually(t, func() bool {
 					return tc.client.Get().Resource("Stargates").Name(stackName).Do(ctx).Into(fStargate) == nil
 				}, 5*time.Second, 500*time.Millisecond)
+
+				fStargateRV := fStargate.GetResourceVersion()
 
 				// Sync depending of the config
 				listener.syncStargate(ctx, map[string]any{}, stack, &generated.Stack{
@@ -273,9 +285,9 @@ func TestSyncStargate(t *testing.T) {
 					return
 				} else {
 					require.Eventually(t, func() bool {
-						stargate := &v1beta1.Stargate{}
+						stargate := &unstructured.Unstructured{}
 						err := tc.client.Get().Resource("Stargates").Name(stackName).Do(ctx).Into(stargate)
-						return err == nil && stargate.ResourceVersion != fStargate.ResourceVersion
+						return err == nil && stargate.GetResourceVersion() != fStargateRV
 					}, 5*time.Second, 500*time.Millisecond)
 				}
 			})

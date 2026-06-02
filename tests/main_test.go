@@ -11,14 +11,15 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
-
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 var (
+	formanceGroupVersion = schema.GroupVersion{Group: "formance.com", Version: "v1beta1"}
+
 	testEnv    *envtest.Environment
 	restConfig *rest.Config
 	k8sClient  *rest.RESTClient
@@ -34,8 +35,6 @@ var _ = BeforeSuite(func() {
 	apiServer.Configure().
 		Set("service-cluster-ip-range", "10.0.0.0/20")
 
-	Expect(v1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
-
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join(filepath.Dir(filename), "..", "dist", "operator",
@@ -45,7 +44,6 @@ var _ = BeforeSuite(func() {
 		ControlPlane: envtest.ControlPlane{
 			APIServer: &apiServer,
 		},
-		Scheme: scheme.Scheme,
 	}
 
 	var err error
@@ -53,7 +51,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(restConfig).NotTo(BeNil())
 
-	restConfig.GroupVersion = &v1beta1.GroupVersion
+	restConfig.GroupVersion = &formanceGroupVersion
 	restConfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	restConfig.APIPath = "/apis"
 

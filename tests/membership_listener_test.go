@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
 
 	"github.com/formancehq/go-libs/v2/collectionutils"
 	"github.com/formancehq/go-libs/v2/logging"
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/formancehq/stack/components/agent/internal"
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	. "github.com/formancehq/stack/components/agent/tests/internal"
@@ -20,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 var _ = Describe("Membership listener", func() {
@@ -54,45 +51,45 @@ var _ = Describe("Membership listener", func() {
 	Context("When sending an existing stack from membership", func() {
 		var (
 			membershipStack *generated.Stack
-			stack           *v1beta1.Stack
+			stack           *unstructured.Unstructured
 		)
 		BeforeEach(func() {
 			stackName := uuid.NewString()
 			wrong := uuid.NewString()
 			By("Creating a wrong client", func() {
-				client := &v1beta1.AuthClient{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: wrong,
-						Labels: map[string]string{
-							"formance.com/created-by-agent": "true",
-							"formance.com/stack":            stackName,
+				client := &unstructured.Unstructured{
+					Object: map[string]interface{}{
+						"apiVersion": formanceGroupVersion.String(),
+						"kind":       "AuthClient",
+						"metadata": map[string]interface{}{
+							"name": wrong,
+							"labels": map[string]interface{}{
+								"formance.com/created-by-agent": "true",
+								"formance.com/stack":            stackName,
+							},
 						},
-					},
-					Spec: v1beta1.AuthClientSpec{
-						StackDependency: v1beta1.StackDependency{
-							Stack: stackName,
+						"spec": map[string]interface{}{
+							"stack":  stackName,
+							"id":     wrong,
+							"public": true,
 						},
-						ID:     wrong,
-						Public: true,
 					},
 				}
 				Expect(k8sClient.Post().Resource("AuthClients").Body(client).Do(context.Background()).Error()).To(BeNil())
 			})
 
 			By("Creating a stack", func() {
+				moduleCRDs, _, err := internal.RetrieveModuleList(ctx, restConfig)
+				Expect(err).To(BeNil())
+
 				modules := make([]*generated.Module, 0)
-				for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
-					object := reflect.New(rtype).Interface()
-					if _, ok := object.(v1beta1.Module); !ok {
+				for _, crd := range moduleCRDs {
+					kind := crd.Spec.Names.Kind
+					if kind == "Stargate" {
 						continue
 					}
-
-					if gvk.Kind == "Stargate" {
-						continue
-					}
-
 					modules = append(modules, &generated.Module{
-						Name: gvk.Kind,
+						Name: kind,
 					})
 				}
 
@@ -131,10 +128,11 @@ var _ = Describe("Membership listener", func() {
 						ExistingStack: membershipStack,
 					},
 				}
-				stack = &v1beta1.Stack{}
+				stack = &unstructured.Unstructured{}
 				Eventually(func() error {
 					return LoadResource("Stacks", membershipStack.ClusterName, stack)
 				}).Should(BeNil())
+				stack.SetGroupVersionKind(formanceGroupVersion.WithKind("Stack"))
 			})
 		})
 		It("Should have sync auth client", func() {
@@ -142,7 +140,7 @@ var _ = Describe("Membership listener", func() {
 			Eventually(func(g Gomega) []unstructured.Unstructured {
 				g.Expect(k8sClient.Get().Resource("AuthClients").VersionedParams(&metav1.ListOptions{
 					LabelSelector: "formance.com/created-by-agent=true,formance.com/stack=" + membershipStack.ClusterName,
-				}, scheme.ParameterCodec).Do(context.Background()).Into(clients)).To(Succeed())
+				}, metav1.ParameterCodec).Do(context.Background()).Into(clients)).To(Succeed())
 				return clients.Items
 			}).Should(HaveLen(2))
 		})
@@ -163,7 +161,7 @@ var _ = Describe("Membership listener", func() {
 			It("Should through an error", func() {
 				err := k8sClient.Patch(types.MergePatchType).
 					Resource("Stacks").
-					Name(stack.Name).
+					Name(stack.GetName()).
 					Body(patch).
 					Do(context.Background()).
 					Error()
@@ -172,54 +170,58 @@ var _ = Describe("Membership listener", func() {
 			})
 		})
 		It("Should have additional labels", func() {
-			Expect(stack.Labels).To(HaveKeyWithValue("formance.com/foo", "bar"))
-			Expect(stack.Labels).To(HaveKeyWithValue("formance.com/foo.foo", "bar"))
-			Expect(stack.Labels).To(HaveKeyWithValue("formance.com/foo-foo", "bar"))
+			Expect(stack.GetLabels()).To(HaveKeyWithValue("formance.com/foo", "bar"))
+			Expect(stack.GetLabels()).To(HaveKeyWithValue("formance.com/foo.foo", "bar"))
+			Expect(stack.GetLabels()).To(HaveKeyWithValue("formance.com/foo-foo", "bar"))
 		})
 		It("Should have additional annotations", func() {
-			Expect(stack.Annotations).To(HaveKeyWithValue("formance.com/foo", "bar"))
-			Expect(stack.Annotations).To(HaveKeyWithValue("formance.com/foo.foo", "bar"))
-			Expect(stack.Annotations).To(HaveKeyWithValue("formance.com/foo-foo", "bar"))
-			Expect(stack.Annotations).To(HaveKeyWithValue("formance.com/foo_foo", "@bar"))
+			Expect(stack.GetAnnotations()).To(HaveKeyWithValue("formance.com/foo", "bar"))
+			Expect(stack.GetAnnotations()).To(HaveKeyWithValue("formance.com/foo.foo", "bar"))
+			Expect(stack.GetAnnotations()).To(HaveKeyWithValue("formance.com/foo-foo", "bar"))
+			Expect(stack.GetAnnotations()).To(HaveKeyWithValue("formance.com/foo_foo", "@bar"))
 		})
 		It("Should create all required crds cluster side", func() {
-			auth := &v1beta1.Auth{}
+			auth := &unstructured.Unstructured{}
 			Eventually(func() error {
 				return LoadResource("Auths", membershipStack.ClusterName, auth)
 			}).Should(BeNil())
 			Expect(auth).To(BeOwnedBy(stack))
 			Expect(auth).To(TargetStack(stack))
-			Expect(auth.Spec.DelegatedOIDCServer).NotTo(BeNil())
-			Expect(auth.Spec.DelegatedOIDCServer.ClientSecret).To(Equal(membershipStack.AuthConfig.ClientSecret))
-			Expect(auth.Spec.DelegatedOIDCServer.ClientID).To(Equal(membershipStack.AuthConfig.ClientId))
-			Expect(auth.Spec.DelegatedOIDCServer.Issuer).To(Equal(membershipStack.AuthConfig.Issuer))
 
-			gateway := &v1beta1.Gateway{}
+			authSpec, _, _ := unstructured.NestedMap(auth.Object, "spec")
+			delegatedOIDC, _ := authSpec["delegatedOIDCServer"].(map[string]interface{})
+			Expect(delegatedOIDC).NotTo(BeNil())
+			Expect(delegatedOIDC["clientSecret"]).To(Equal(membershipStack.AuthConfig.ClientSecret))
+			Expect(delegatedOIDC["clientID"]).To(Equal(membershipStack.AuthConfig.ClientId))
+			Expect(delegatedOIDC["issuer"]).To(Equal(membershipStack.AuthConfig.Issuer))
+
+			gateway := &unstructured.Unstructured{}
 			Eventually(func() error {
 				return LoadResource("Gateways", membershipStack.ClusterName, gateway)
 			}).Should(BeNil())
 			Expect(gateway).To(BeOwnedBy(stack))
 			Expect(gateway).To(TargetStack(stack))
-			Expect(gateway.Spec.Ingress).NotTo(BeNil())
-			Expect(gateway.Spec.Ingress.Host).To(Equal(fmt.Sprintf("%s.%s", stack.GetName(), clientInfo.BaseUrl.Host)))
-			Expect(gateway.Spec.Ingress.Scheme).To(Equal(clientInfo.BaseUrl.Scheme))
 
-			for gvk, rtype := range scheme.Scheme.AllKnownTypes() {
-				object := reflect.New(rtype).Interface()
-				if _, ok := object.(v1beta1.Module); !ok {
+			gatewaySpec, _, _ := unstructured.NestedMap(gateway.Object, "spec")
+			ingress, _ := gatewaySpec["ingress"].(map[string]interface{})
+			Expect(ingress).NotTo(BeNil())
+			Expect(ingress["host"]).To(Equal(fmt.Sprintf("%s.%s", stack.GetName(), clientInfo.BaseUrl.Host)))
+			Expect(ingress["scheme"]).To(Equal(clientInfo.BaseUrl.Scheme))
+
+			moduleCRDs, _, err := internal.RetrieveModuleList(ctx, restConfig)
+			Expect(err).To(BeNil())
+
+			for _, crd := range moduleCRDs {
+				kind := crd.Spec.Names.Kind
+				if kind == "Stargate" {
 					continue
 				}
 
-				if gvk.Kind == "Stargate" {
-					continue
-				}
-
-				restMapping, err := mapper.RESTMapping(gvk.GroupKind())
-				Expect(err).To(BeNil())
+				resource := crd.Status.AcceptedNames.Plural
 
 				u := &unstructured.Unstructured{}
 				Eventually(func() error {
-					return LoadResource(restMapping.Resource.Resource, membershipStack.ClusterName, u)
+					return LoadResource(resource, membershipStack.ClusterName, u)
 				}).Should(Succeed())
 				Expect(u).To(BeOwnedBy(stack))
 				Expect(u).To(TargetStack(stack))
@@ -266,10 +268,11 @@ var _ = Describe("Membership listener", func() {
 				}
 			})
 			shouldBeDisabled := func() {
-				stack := &v1beta1.Stack{}
+				s := &unstructured.Unstructured{}
 				Eventually(func(g Gomega) bool {
-					g.Expect(LoadResource("Stacks", membershipStack.ClusterName, stack)).To(Succeed())
-					return stack.Spec.Disabled
+					g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+					disabled, _, _ := unstructured.NestedBool(s.Object, "spec", "disabled")
+					return disabled
 				}).Should(BeTrue())
 			}
 			It("Should disable the stack on the cluster", shouldBeDisabled)
@@ -285,10 +288,11 @@ var _ = Describe("Membership listener", func() {
 					}
 				})
 				It("Should enable the stack on the cluster", func() {
-					stack := &v1beta1.Stack{}
+					s := &unstructured.Unstructured{}
 					Eventually(func(g Gomega) bool {
-						g.Expect(LoadResource("Stacks", membershipStack.ClusterName, stack)).To(Succeed())
-						return stack.Spec.Disabled
+						g.Expect(LoadResource("Stacks", membershipStack.ClusterName, s)).To(Succeed())
+						disabled, _, _ := unstructured.NestedBool(s.Object, "spec", "disabled")
+						return disabled
 					}).Should(BeFalse())
 				})
 			})

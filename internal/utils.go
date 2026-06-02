@@ -4,13 +4,25 @@ import (
 	"encoding/json"
 	"reflect"
 
-	"github.com/formancehq/operator/v3/api/formance.com/v1beta1"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/structpb"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func Restrict[T any](obj map[string]interface{}) (map[string]interface{}, error) {
+// formanceGroupVersion is the GroupVersion for all Formance CRDs,
+// defined locally to avoid importing the operator module.
+var formanceGroupVersion = schema.GroupVersion{Group: "formance.com", Version: "v1beta1"}
+
+// status mirrors the operator's v1beta1.Status struct so we can filter
+// unstructured status maps without importing the operator module.
+type status struct {
+	Ready      bool        `json:"ready"`
+	Info       string      `json:"info,omitempty"`
+	Conditions interface{} `json:"conditions,omitempty"`
+}
+
+func restrict[T any](obj map[string]interface{}) (map[string]interface{}, error) {
 	if len(obj) == 0 {
 		return nil, errors.New("obj is empty")
 	}
@@ -40,7 +52,7 @@ func Restrict[T any](obj map[string]interface{}) (map[string]interface{}, error)
 }
 
 func getStatus(unstructuredModule *unstructured.Unstructured) (*structpb.Struct, error) {
-	status, found, err := unstructured.NestedMap(unstructuredModule.Object, "status")
+	s, found, err := unstructured.NestedMap(unstructuredModule.Object, "status")
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to get status from unstructured")
 	}
@@ -49,15 +61,14 @@ func getStatus(unstructuredModule *unstructured.Unstructured) (*structpb.Struct,
 		return nil, nil
 	}
 
-	status, err = Restrict[v1beta1.Status](status)
+	s, err = restrict[status](s)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to restrict status according to v1beta1.StatusWithConditions")
+		return nil, errors.Wrap(err, "unable to restrict status")
 	}
 
-	protoStatus, err := structpb.NewStruct(status)
+	protoStatus, err := structpb.NewStruct(s)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to convert status to proto struct")
 	}
 	return protoStatus, nil
-
 }
