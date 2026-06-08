@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/apimachinery/pkg/labels"
@@ -20,6 +21,7 @@ import (
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/structpb"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -54,7 +56,10 @@ func (m *MembershipClientMock) Send(message *generated.Message) error {
 }
 
 func (m *MembershipClientMock) GetMessages() []*generated.Message {
-	return m.messages
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return slices.Clone(m.messages)
 }
 
 func NewMembershipClientMock() *MembershipClientMock {
@@ -81,6 +86,20 @@ type membershipListener struct {
 	membershipClient MembershipClient
 	modules          modules
 	wp               *pond.WorkerPool
+
+	postSyncStatusReconcileInterval time.Duration
+	postSyncStatusReconcileTimeout  time.Duration
+}
+
+const (
+	defaultPostSyncStatusReconcileInterval = 2 * time.Second
+	defaultPostSyncStatusReconcileTimeout  = 2 * time.Minute
+)
+
+type statusResource struct {
+	resource string
+	kind     string
+	name     string
 }
 
 func (c *membershipListener) Start(ctx context.Context) {
@@ -169,6 +188,184 @@ func (c *membershipListener) syncExistingStack(ctx context.Context, membershipSt
 	c.syncAuthClients(ctx, metadata, stack, membershipStack.StaticClients)
 
 	logging.FromContext(ctx).Infof("Stack %s updated cluster side", stack.GetName())
+	c.startPostSyncStatusReconcile(ctx, membershipStack)
+}
+
+func (c *membershipListener) startPostSyncStatusReconcile(ctx context.Context, membershipStack *generated.Stack) {
+	if c.postSyncStatusReconcileInterval <= 0 || c.postSyncStatusReconcileTimeout <= 0 {
+		return
+	}
+
+	stackName := membershipStack.ClusterName
+	resources := c.statusResourcesForStack(membershipStack)
+	ctx, cancel := context.WithTimeout(ctx, c.postSyncStatusReconcileTimeout)
+	go func() {
+		defer cancel()
+		c.publishStackStatusSnapshots(ctx, stackName, resources)
+	}()
+}
+
+func (c *membershipListener) publishStackStatusSnapshots(ctx context.Context, stackName string, resources []statusResource) {
+	if len(resources) == 0 {
+		return
+	}
+
+	logger := logging.FromContext(ctx).WithField("stack", stackName)
+	logger.Infof("Starting targeted status reconciliation for stack %s", stackName)
+
+	seenStatuses := map[string]string{}
+	readyResources := map[string]struct{}{}
+
+	ticker := time.NewTicker(c.postSyncStatusReconcileInterval)
+	defer ticker.Stop()
+
+	for {
+		c.publishStackStatusSnapshotsOnce(ctx, resources, seenStatuses, readyResources)
+		if len(readyResources) == len(resources) {
+			logger.Infof("Targeted status reconciliation completed for stack %s", stackName)
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			logger.Infof("Targeted status reconciliation stopped for stack %s: %s", stackName, ctx.Err())
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *membershipListener) publishStackStatusSnapshotsOnce(
+	ctx context.Context,
+	resources []statusResource,
+	seenStatuses map[string]string,
+	readyResources map[string]struct{},
+) {
+	for _, resource := range resources {
+		status, err := c.publishStatusSnapshot(ctx, resource, seenStatuses)
+		if err != nil {
+			logging.FromContext(ctx).WithFields(map[string]any{
+				"resource": resource.resource,
+				"kind":     resource.kind,
+				"name":     resource.name,
+			}).Errorf("Unable to publish status snapshot: %s", err)
+			continue
+		}
+		if status == nil {
+			continue
+		}
+		if statusReady(status) {
+			readyResources[statusResourceKey(resource)] = struct{}{}
+		}
+	}
+}
+
+func (c *membershipListener) publishStatusSnapshot(
+	ctx context.Context,
+	resource statusResource,
+	seenStatuses map[string]string,
+) (*structpb.Struct, error) {
+	u, err := c.client.GetFresh(ctx, resource.resource, resource.name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	status, err := getStatus(u)
+	if err != nil {
+		return nil, err
+	}
+	if status == nil {
+		return nil, nil
+	}
+
+	key := statusResourceKey(resource)
+	statusKey, err := statusSnapshotKey(status)
+	if err != nil {
+		return nil, err
+	}
+	if seenStatuses[key] == statusKey {
+		return status, nil
+	}
+
+	if resource.kind == "Stack" {
+		if err := c.membershipClient.Send(&generated.Message{
+			Message: &generated.Message_StatusChanged{
+				StatusChanged: &generated.StatusChanged{
+					ClusterName: resource.name,
+					Statuses:    status,
+				},
+			},
+		}); err != nil {
+			return nil, err
+		}
+	} else {
+		u.SetGroupVersionKind(formanceGroupVersion.WithKind(resource.kind))
+		if err := c.membershipClient.Send(fromUnstructuredToModuleStatusChanged(u, status)); err != nil {
+			return nil, err
+		}
+	}
+
+	seenStatuses[key] = statusKey
+	logging.FromContext(ctx).WithFields(map[string]any{
+		"resource": resource.resource,
+		"kind":     resource.kind,
+		"name":     resource.name,
+	}).Infof("Published status snapshot")
+	return status, nil
+}
+
+func (c *membershipListener) statusResourcesForStack(membershipStack *generated.Stack) []statusResource {
+	ret := []statusResource{{
+		resource: "stacks",
+		kind:     "Stack",
+		name:     membershipStack.ClusterName,
+	}}
+
+	expectedModules := map[string]struct{}{}
+	for _, module := range membershipStack.Modules {
+		expectedModules[strings.ToLower(module.Name)] = struct{}{}
+	}
+	if membershipStack.StargateConfig != nil && membershipStack.StargateConfig.Enabled {
+		expectedModules["stargate"] = struct{}{}
+	}
+
+	for _, crd := range c.modules {
+		singular := strings.ToLower(crd.Status.AcceptedNames.Singular)
+		kind := crd.Spec.Names.Kind
+		if _, ok := expectedModules[singular]; !ok {
+			if _, ok := expectedModules[strings.ToLower(kind)]; !ok {
+				continue
+			}
+		}
+
+		ret = append(ret, statusResource{
+			resource: crd.Status.AcceptedNames.Plural,
+			kind:     kind,
+			name:     membershipStack.ClusterName,
+		})
+	}
+
+	return ret
+}
+
+func statusResourceKey(resource statusResource) string {
+	return resource.resource + "/" + resource.name
+}
+
+func statusSnapshotKey(status *structpb.Struct) (string, error) {
+	data, err := json.Marshal(status.AsMap())
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func statusReady(status *structpb.Struct) bool {
+	value, ok := status.Fields["ready"]
+	return ok && value.GetBoolValue()
 }
 
 func (c *membershipListener) generateMetadata(membershipStack *generated.Stack) map[string]any {
@@ -481,6 +678,9 @@ func NewMembershipListener(
 		membershipClient: membershipClient,
 		wp:               pond.New(5, 5),
 		modules:          modules,
+
+		postSyncStatusReconcileInterval: defaultPostSyncStatusReconcileInterval,
+		postSyncStatusReconcileTimeout:  defaultPostSyncStatusReconcileTimeout,
 	}
 }
 

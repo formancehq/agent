@@ -19,6 +19,7 @@ import (
 
 type K8SClient interface {
 	Get(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error)
+	GetFresh(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error)
 	Create(ctx context.Context, resource string, o *unstructured.Unstructured) error
 	Patch(ctx context.Context, resource, name string, body []byte) error
 	Delete(ctx context.Context, resource, name string) error
@@ -32,6 +33,10 @@ type defaultK8SClient struct {
 }
 
 func (c defaultK8SClient) Get(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error) {
+	return c.GetFresh(ctx, resource, name)
+}
+
+func (c defaultK8SClient) GetFresh(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error) {
 	u := &unstructured.Unstructured{}
 	if err := c.restClient.Get().
 		Resource(resource).
@@ -132,6 +137,10 @@ func (c cachedK8SClient) Get(ctx context.Context, resource string, name string) 
 	}
 	logging.FromContext(ctx).Debugf("Cache hit for resource %s/%s", resource, name)
 	return ret.(*unstructured.Unstructured), nil
+}
+
+func (c cachedK8SClient) GetFresh(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error) {
+	return c.K8SClient.GetFresh(ctx, resource, name)
 }
 
 func (c cachedK8SClient) List(_ context.Context, resource string, selector labels.Selector) ([]unstructured.Unstructured, error) {

@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -314,4 +315,168 @@ func TestDeleteStackNotExisting(t *testing.T) {
 
 		require.Equal(t, "non-existing-stack", message.StackDeleted.ClusterName)
 	})
+}
+
+func TestPublishStackStatusSnapshotsPublishesOnlyExpectedResources(t *testing.T) {
+	stackName := uuid.NewString()
+	mock := NewMembershipClientMock()
+	listener := NewMembershipListener(
+		newFakeK8SClient(map[string]*unstructured.Unstructured{
+			"stacks/" + stackName:   newStatusObject("Stack", stackName, true),
+			"auths/" + stackName:    newStatusObject("Auth", stackName, true),
+			"gateways/" + stackName: newStatusObject("Gateway", stackName, true),
+			"ledgers/" + stackName:  newStatusObject("Ledger", stackName, true),
+		}),
+		ClientInfo{},
+		nil,
+		mock,
+		[]v1apis.CustomResourceDefinition{
+			newModuleCRD("Auth", "auth", "auths"),
+			newModuleCRD("Gateway", "gateway", "gateways"),
+			newModuleCRD("Ledger", "ledger", "ledgers"),
+		},
+	)
+	listener.postSyncStatusReconcileInterval = time.Millisecond
+	listener.postSyncStatusReconcileTimeout = 50 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(logging.TestingContext(), listener.postSyncStatusReconcileTimeout)
+	defer cancel()
+	membershipStack := &generated.Stack{
+		ClusterName: stackName,
+		Modules: []*generated.Module{
+			{Name: "Auth"},
+			{Name: "Gateway"},
+		},
+	}
+	listener.publishStackStatusSnapshots(ctx, stackName, listener.statusResourcesForStack(membershipStack))
+
+	messages := mock.GetMessages()
+	require.Len(t, messages, 3)
+
+	seen := map[string]bool{}
+	for _, message := range messages {
+		switch msg := message.Message.(type) {
+		case *generated.Message_StatusChanged:
+			seen["Stack"] = msg.StatusChanged.ClusterName == stackName
+		case *generated.Message_ModuleStatusChanged:
+			seen[msg.ModuleStatusChanged.Vk.Kind] = msg.ModuleStatusChanged.ClusterName == stackName
+		}
+	}
+
+	require.Equal(t, map[string]bool{
+		"Stack":   true,
+		"Auth":    true,
+		"Gateway": true,
+	}, seen)
+}
+
+func TestPublishStackStatusSnapshotsDeduplicatesUnchangedStatuses(t *testing.T) {
+	stackName := uuid.NewString()
+	mock := NewMembershipClientMock()
+	listener := NewMembershipListener(
+		newFakeK8SClient(map[string]*unstructured.Unstructured{
+			"stacks/" + stackName: newStatusObject("Stack", stackName, true),
+			"auths/" + stackName:  newStatusObject("Auth", stackName, false),
+		}),
+		ClientInfo{},
+		nil,
+		mock,
+		[]v1apis.CustomResourceDefinition{
+			newModuleCRD("Auth", "auth", "auths"),
+		},
+	)
+	listener.postSyncStatusReconcileInterval = time.Millisecond
+	listener.postSyncStatusReconcileTimeout = 25 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(logging.TestingContext(), listener.postSyncStatusReconcileTimeout)
+	defer cancel()
+	membershipStack := &generated.Stack{
+		ClusterName: stackName,
+		Modules: []*generated.Module{
+			{Name: "Auth"},
+		},
+	}
+	listener.publishStackStatusSnapshots(ctx, stackName, listener.statusResourcesForStack(membershipStack))
+
+	require.Len(t, mock.GetMessages(), 2)
+}
+
+type fakeK8SClient struct {
+	objects map[string]*unstructured.Unstructured
+}
+
+func newFakeK8SClient(objects map[string]*unstructured.Unstructured) *fakeK8SClient {
+	return &fakeK8SClient{
+		objects: objects,
+	}
+}
+
+func (c *fakeK8SClient) Get(ctx context.Context, resource string, name string) (*unstructured.Unstructured, error) {
+	return c.GetFresh(ctx, resource, name)
+}
+
+func (c *fakeK8SClient) GetFresh(_ context.Context, resource string, name string) (*unstructured.Unstructured, error) {
+	obj, ok := c.objects[resource+"/"+name]
+	if !ok {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: "formance.com", Resource: resource}, name)
+	}
+	return obj.DeepCopy(), nil
+}
+
+func (c *fakeK8SClient) Create(context.Context, string, *unstructured.Unstructured) error {
+	return nil
+}
+
+func (c *fakeK8SClient) Patch(context.Context, string, string, []byte) error {
+	return nil
+}
+
+func (c *fakeK8SClient) Delete(context.Context, string, string) error {
+	return nil
+}
+
+func (c *fakeK8SClient) EnsureNotExists(context.Context, string, string) error {
+	return nil
+}
+
+func (c *fakeK8SClient) EnsureNotExistsBySelector(context.Context, string, labels.Selector) error {
+	return nil
+}
+
+func (c *fakeK8SClient) List(context.Context, string, labels.Selector) ([]unstructured.Unstructured, error) {
+	return nil, nil
+}
+
+func newStatusObject(kind string, name string, ready bool) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(formanceGV.WithKind(kind))
+	u.SetName(name)
+	u.Object["status"] = map[string]interface{}{
+		"ready": ready,
+		"info":  "test",
+	}
+	return u
+}
+
+func newModuleCRD(kind string, singular string, plural string) v1apis.CustomResourceDefinition {
+	return v1apis.CustomResourceDefinition{
+		Spec: v1apis.CustomResourceDefinitionSpec{
+			Group: "formance.com",
+			Names: v1apis.CustomResourceDefinitionNames{
+				Kind:     kind,
+				Singular: singular,
+				Plural:   plural,
+			},
+			Versions: []v1apis.CustomResourceDefinitionVersion{{
+				Name: "v1beta1",
+			}},
+		},
+		Status: v1apis.CustomResourceDefinitionStatus{
+			AcceptedNames: v1apis.CustomResourceDefinitionNames{
+				Kind:     kind,
+				Singular: singular,
+				Plural:   plural,
+			},
+		},
+	}
 }
