@@ -7,6 +7,15 @@ option go_package = "github.com/formancehq/membership/internal/grpc/generated";
 
 package server;
 
+// Legacy bidirectional streaming agent service.
+// Kept alongside AgentService for ~3 months to support old agent binaries that
+// haven't yet migrated to the pull model. Sunset target: 2026-09-09. New
+// agents must use AgentService. Membership-api keeps Server registered behind
+// a feature flag.
+service Server {
+  rpc Join(stream Message) returns (stream Order) {}
+}
+
 // Pull-based agent service. The agent polls for stacks and reports status via unary RPCs.
 service AgentService {
   // Agent pulls stacks that need syncing, paginated by (updated_at, id) cursor
@@ -183,4 +192,58 @@ message UpdatedVersion {
 
 message DeletedVersion {
   string name = 1;
+}
+
+// ─── Legacy streaming protocol messages (Server.Join) ───
+// Kept for backwards compatibility with old agents. Remove on 2026-09-09 sunset.
+
+message ConnectRequest {
+  string id = 1;
+  map<string, string> tags = 2;
+  string baseUrl = 3;
+  bool production = 4;
+}
+
+message Order {
+  reserved 5;
+  oneof message {
+    Connected connected = 1;
+    Stack existingStack = 2;
+    DeletedStack deletedStack = 3;
+    Ping ping = 4;
+    DisabledStack disabledStack = 6;
+    EnabledStack enabledStack = 7;
+  }
+  map<string, string> metadata = 8;
+}
+
+message Message {
+  oneof message {
+    StatusChanged statusChanged = 1;
+    Pong pong = 2;
+
+    AddedVersion addedVersion = 3;
+    DeletedVersion deletedVersion = 4;
+    UpdatedVersion updatedVersion = 5;
+
+    ModuleStatusChanged moduleStatusChanged = 6;
+    ModuleDeleted moduleDeleted = 7;
+
+    DeletedStack stackDeleted = 8;
+  }
+  map<string, string> metadata = 9;
+}
+
+message Connected {}
+
+message Ping {}
+
+message Pong {}
+
+message DisabledStack {
+  string clusterName = 1;
+}
+
+message EnabledStack {
+  string clusterName = 1;
 }
