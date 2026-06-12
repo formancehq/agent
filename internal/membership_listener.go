@@ -81,6 +81,7 @@ type membershipListener struct {
 	membershipClient MembershipClient
 	modules          modules
 	wp               *pond.WorkerPool
+	dispatcher       *stackDispatcher
 }
 
 func (c *membershipListener) Start(ctx context.Context) {
@@ -91,56 +92,65 @@ func (c *membershipListener) Start(ctx context.Context) {
 			if !ok {
 				return
 			}
-
-			c.wp.Submit(func() {
-				ctx = grpcclient.ExtractOtelCtxFromMessage(ctx, msg)
-
-				ctx, span := tracer.Start(ctx, "NewOrder")
-				defer span.End()
-
-				logger := logging.FromContext(ctx).
-					WithField("traceId", span.SpanContext().TraceID()).
-					WithField("spanId", span.SpanContext().SpanID())
-				logger.Infof("Got message from membership: %T", msg.GetMessage())
-
-				switch msg := msg.Message.(type) {
-				case *generated.Order_ExistingStack:
-					logger = logger.WithField("stack", msg.ExistingStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("SyncExistingStack")
-					span.SetAttributes(attribute.String("stack", msg.ExistingStack.ClusterName))
-
-					c.syncExistingStack(ctx, msg.ExistingStack)
-				case *generated.Order_DeletedStack:
-					logger = logger.WithField("stack", msg.DeletedStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("DeleteStack")
-					span.SetAttributes(attribute.String("stack", msg.DeletedStack.ClusterName))
-
-					c.deleteStack(ctx, msg.DeletedStack)
-				case *generated.Order_DisabledStack:
-					logger = logger.WithField("stack", msg.DisabledStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("DisableStack")
-					span.SetAttributes(attribute.String("stack", msg.DisabledStack.ClusterName))
-
-					c.disableStack(ctx, msg.DisabledStack)
-				case *generated.Order_EnabledStack:
-					logger = logger.WithField("stack", msg.EnabledStack.ClusterName)
-					ctx = logging.ContextWithLogger(ctx, logger)
-
-					span.SetName("EnableStack")
-					span.SetAttributes(attribute.String("stack", msg.EnabledStack.ClusterName))
-
-					c.enableStack(ctx, msg.EnabledStack)
-				}
-			})
+			c.dispatcher.Dispatch(ctx, msg)
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// handleOrder is the per-order worker invoked by the dispatcher. It owns
+// trace span creation and routes to the per-type sync method. The
+// dispatcher guarantees at most one in-flight call to handleOrder per
+// stack, so the sync methods can assume no concurrent peer for the same
+// stack. They must, however, return promptly on ctx cancellation — the
+// dispatcher cancels the in-flight handler when a superseding order
+// arrives (e.g. a DeletedStack arriving while ExistingStack is in
+// progress).
+func (c *membershipListener) handleOrder(ctx context.Context, msg *generated.Order) {
+	ctx = grpcclient.ExtractOtelCtxFromMessage(ctx, msg)
+
+	ctx, span := tracer.Start(ctx, "NewOrder")
+	defer span.End()
+
+	logger := logging.FromContext(ctx).
+		WithField("traceId", span.SpanContext().TraceID()).
+		WithField("spanId", span.SpanContext().SpanID())
+	logger.Infof("Got message from membership: %T", msg.GetMessage())
+
+	switch msg := msg.Message.(type) {
+	case *generated.Order_ExistingStack:
+		logger = logger.WithField("stack", msg.ExistingStack.ClusterName)
+		ctx = logging.ContextWithLogger(ctx, logger)
+
+		span.SetName("SyncExistingStack")
+		span.SetAttributes(attribute.String("stack", msg.ExistingStack.ClusterName))
+
+		c.syncExistingStack(ctx, msg.ExistingStack)
+	case *generated.Order_DeletedStack:
+		logger = logger.WithField("stack", msg.DeletedStack.ClusterName)
+		ctx = logging.ContextWithLogger(ctx, logger)
+
+		span.SetName("DeleteStack")
+		span.SetAttributes(attribute.String("stack", msg.DeletedStack.ClusterName))
+
+		c.deleteStack(ctx, msg.DeletedStack)
+	case *generated.Order_DisabledStack:
+		logger = logger.WithField("stack", msg.DisabledStack.ClusterName)
+		ctx = logging.ContextWithLogger(ctx, logger)
+
+		span.SetName("DisableStack")
+		span.SetAttributes(attribute.String("stack", msg.DisabledStack.ClusterName))
+
+		c.disableStack(ctx, msg.DisabledStack)
+	case *generated.Order_EnabledStack:
+		logger = logger.WithField("stack", msg.EnabledStack.ClusterName)
+		ctx = logging.ContextWithLogger(ctx, logger)
+
+		span.SetName("EnableStack")
+		span.SetAttributes(attribute.String("stack", msg.EnabledStack.ClusterName))
+
+		c.enableStack(ctx, msg.EnabledStack)
 	}
 }
 
@@ -160,12 +170,27 @@ func (c *membershipListener) syncExistingStack(ctx context.Context, membershipSt
 		},
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		logging.FromContext(ctx).Errorf("Unable to create stack cluster side: %s", err)
 		return
 	}
 
+	// The dispatcher may cancel ctx mid-sync when a superseding order
+	// arrives. Bail out between steps to avoid pointless work; the
+	// successor order will reconcile any partial state.
+	if ctx.Err() != nil {
+		return
+	}
 	c.syncModules(ctx, metadata, stack, membershipStack)
+	if ctx.Err() != nil {
+		return
+	}
 	c.syncStargate(ctx, metadata, stack, membershipStack)
+	if ctx.Err() != nil {
+		return
+	}
 	c.syncAuthClients(ctx, metadata, stack, membershipStack.StaticClients)
 
 	logging.FromContext(ctx).Infof("Stack %s updated cluster side", stack.GetName())
@@ -474,14 +499,17 @@ func NewMembershipListener(
 	membershipClient MembershipClient,
 	modules modules,
 ) *membershipListener {
-	return &membershipListener{
+	wp := pond.New(5, 5)
+	l := &membershipListener{
 		client:           client,
 		clientInfo:       clientInfo,
 		restMapper:       mapper,
 		membershipClient: membershipClient,
-		wp:               pond.New(5, 5),
+		wp:               wp,
 		modules:          modules,
 	}
+	l.dispatcher = newStackDispatcher(wp, l.handleOrder)
+	return l
 }
 
 func must[T any](t *T, err error) T {
