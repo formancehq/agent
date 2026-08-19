@@ -3,7 +3,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
@@ -20,13 +19,17 @@ import (
 	"github.com/formancehq/stack/components/agent/internal/generated"
 	"github.com/formancehq/stack/components/agent/internal/grpcclient"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	fieldManagerAgent   = "formance-agent"
+	fieldManagerDisable = "formance-agent:disable"
 )
 
 //go:generate mockgen -source=membership_listener.go -destination=membership_client_generated.go -package=internal . MembershipClient
@@ -363,7 +366,19 @@ func (c *membershipListener) deleteStack(ctx context.Context, stack *generated.D
 }
 
 func (c *membershipListener) disableStack(ctx context.Context, stack *generated.DisabledStack) {
-	if err := c.client.Patch(ctx, "Stacks", stack.ClusterName, []byte(`{"spec": {"disabled": true}}`)); err != nil {
+	obj := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": formanceGroupVersion.String(),
+			"kind":       "Stack",
+			"metadata": map[string]any{
+				"name": stack.ClusterName,
+			},
+			"spec": map[string]any{
+				"disabled": true,
+			},
+		},
+	}
+	if _, err := c.client.Apply(ctx, "Stacks", obj, fieldManagerDisable, true); err != nil {
 		logging.FromContext(ctx).Errorf("Disabling cluster side: %s", err)
 		return
 	}
@@ -372,8 +387,20 @@ func (c *membershipListener) disableStack(ctx context.Context, stack *generated.
 }
 
 func (c *membershipListener) enableStack(ctx context.Context, stack *generated.EnabledStack) {
-	if err := c.client.Patch(ctx, "Stacks", stack.ClusterName, []byte(`{"spec": {"disabled": false}}`)); err != nil {
-		logging.FromContext(ctx).Errorf("Disabling cluster side: %s", err)
+	obj := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": formanceGroupVersion.String(),
+			"kind":       "Stack",
+			"metadata": map[string]any{
+				"name": stack.ClusterName,
+			},
+			"spec": map[string]any{
+				"disabled": false,
+			},
+		},
+	}
+	if _, err := c.client.Apply(ctx, "Stacks", obj, fieldManagerDisable, true); err != nil {
+		logging.FromContext(ctx).Errorf("Enabling cluster side: %s", err)
 		return
 	}
 
@@ -385,64 +412,56 @@ func (c *membershipListener) createOrUpdate(ctx context.Context, gvk schema.Grou
 	logger := logging.FromContext(ctx).WithFields(map[string]any{
 		"gvk": gvk,
 	})
-	logger.Infof("creating object '%s'", name)
+	logger.Infof("applying object '%s'", name)
+
 	if content["metadata"] == nil {
 		content["metadata"] = map[string]any{}
 	}
+	md := content["metadata"].(map[string]any)
 
-	if content["metadata"].(map[string]any)["labels"] == nil {
-		content["metadata"].(map[string]any)["labels"] = map[string]any{}
+	if md["labels"] == nil {
+		md["labels"] = map[string]any{}
+	}
+	md["labels"].(map[string]any)["formance.com/created-by-agent"] = "true"
+	md["labels"].(map[string]any)["formance.com/stack"] = stackName
+	md["name"] = name
+
+	if owner != nil {
+		md["ownerReferences"] = []any{
+			map[string]any{
+				"apiVersion": owner.APIVersion,
+				"kind":       owner.Kind,
+				"name":       owner.Name,
+				"uid":        string(owner.UID),
+			},
+		}
 	}
 
-	content["metadata"].(map[string]any)["labels"].(map[string]any)["formance.com/created-by-agent"] = "true"
-	content["metadata"].(map[string]any)["labels"].(map[string]any)["formance.com/stack"] = stackName
-	content["metadata"].(map[string]any)["name"] = name
+	content["apiVersion"] = gvk.GroupVersion().String()
+	content["kind"] = gvk.Kind
 
 	restMapping, err := c.restMapper.RESTMapping(gvk.GroupKind())
 	if err != nil {
 		return nil, errors.Wrap(err, "getting rest mapping")
 	}
 
-	u, err := c.client.Get(ctx, restMapping.Resource.Resource, name)
+	u := &unstructured.Unstructured{}
+	u.SetUnstructuredContent(content)
+
+	result, err := c.client.Apply(ctx, restMapping.Resource.Resource, u, fieldManagerAgent, false)
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
-			return nil, errors.Wrap(err, "reading object")
+		if apierrors.IsConflict(err) {
+			logger.Infof("Conflict applying %s/%s: field owned by another manager, skipping update", gvk.Kind, name)
+			existing, getErr := c.client.Get(ctx, restMapping.Resource.Resource, name)
+			if getErr != nil {
+				return nil, errors.Wrap(getErr, "getting existing object after conflict")
+			}
+			return existing, nil
 		}
-
-		logger.Infof("Object not found, create a new one")
-
-		u := &unstructured.Unstructured{}
-		u.SetUnstructuredContent(content)
-		u.SetGroupVersionKind(gvk)
-		u.SetName(name)
-		if owner != nil {
-			u.SetOwnerReferences([]metav1.OwnerReference{*owner})
-		}
-
-		if err := c.client.Create(ctx, restMapping.Resource.Resource, u); err != nil {
-			return nil, errors.Wrap(err, "creating object")
-		}
-
-		return u, nil
-
+		return nil, errors.Wrap(err, "applying object")
 	}
 
-	if equality.Semantic.DeepDerivative(content, u.Object) {
-		logger.Infof("Object found and has expected content, skip it")
-		return u, nil
-	}
-
-	logger.Infof("Object exists and content differ, patch it")
-	contentData, err := json.Marshal(content)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.client.Patch(ctx, restMapping.Resource.Resource, name, contentData); err != nil {
-		return nil, errors.Wrap(err, "patching object")
-	}
-
-	return u, nil
+	return result, nil
 }
 
 func (c *membershipListener) createOrUpdateStackDependency(
