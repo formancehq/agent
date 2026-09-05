@@ -1,6 +1,6 @@
 module github.com/formancehq/stack/components/agent
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/alitto/pond v1.9.2
@@ -112,7 +112,7 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
