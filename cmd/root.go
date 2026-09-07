@@ -5,12 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"time"
 
-	"github.com/formancehq/go-libs/v2/httpclient"
 	"github.com/formancehq/go-libs/v2/licence"
 	"github.com/formancehq/go-libs/v2/logging"
 	"github.com/formancehq/go-libs/v2/otlp"
@@ -23,7 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"k8s.io/client-go/transport"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/homedir"
 )
 
@@ -124,22 +122,9 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	kubeConfig, _ := cmd.Flags().GetString(kubeConfigFlag)
-
-	restConfig, err := internal.NewK8SConfig(kubeConfig)
+	restConfig, err := createK8SConfig(cmd)
 	if err != nil {
 		return err
-	}
-
-	debug, _ := cmd.Flags().GetBool(service.DebugFlag)
-	if debug {
-		restConfig.Wrap(transport.Wrappers(
-			transport.WrapperFunc(
-				func(rt http.RoundTripper) http.RoundTripper {
-					return httpclient.NewDebugHTTPTransport(rt)
-				},
-			)),
-		)
 	}
 
 	isProduction, _ := cmd.Flags().GetBool(productionFlag)
@@ -173,6 +158,12 @@ func runAgent(cmd *cobra.Command, _ []string) error {
 	}
 
 	return service.New(cmd.OutOrStdout(), options...).Run(cmd)
+}
+
+func createK8SConfig(cmd *cobra.Command) (*rest.Config, error) {
+	kubeConfig, _ := cmd.Flags().GetString(kubeConfigFlag)
+	// Watches must stream immediately; dumping response bodies blocks until EOF.
+	return internal.NewK8SConfig(kubeConfig)
 }
 
 func createAuthenticator(cmd *cobra.Command) (internal.Authenticator, error) {
