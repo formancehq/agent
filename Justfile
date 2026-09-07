@@ -30,7 +30,7 @@ tests-unit: lint generate
   set -euo pipefail
   mkdir -p ./coverage
   export KUBEBUILDER_ASSETS=$(setup-envtest use {{ ENVTEST_VERSION }} -p path)
-  go test -coverprofile=coverage/unit.txt -covermode=atomic ./internal/...
+  go test -coverprofile=coverage/unit.txt -covermode=atomic ./cmd/... ./internal/...
   cat ./coverage/unit.txt | grep -Ev "generated|pkg|web|tests/unit|with_trace|noop" > ./coverage/unit_filtered.txt
 
 # TODO(fix): test using `--race`
