@@ -4,7 +4,7 @@ project_name: agent
 
 includes:
   - from_url:
-      url: https://raw.githubusercontent.com/formancehq/earthly/refs/heads/main/.goreleaser.default.yaml
+      url: https://raw.githubusercontent.com/formancehq/earthly/refs/heads/main/.goreleaser.default-v2.yaml
       
 builds:
   - binary: agent
@@ -24,9 +24,9 @@ builds:
 
 archives:
   - id: "{{.ProjectName}}"
-    builds:
+    ids:
       - agent
-    format: tar.gz
+    formats: [tar.gz]
     name_template: "{{.ProjectName}}_{{.Os}}-{{.Arch}}"
 
 release:
