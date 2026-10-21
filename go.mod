@@ -2,6 +2,8 @@ module github.com/formancehq/stack/components/agent
 
 go 1.26.0
 
+toolchain go1.27.3
+
 require (
 	github.com/alitto/pond v1.9.2
 	github.com/formancehq/go-libs/v2 v2.2.4
