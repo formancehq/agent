@@ -1,9 +1,14 @@
 {
-  description = "A Nix-flake-based Go 1.26 development environment";
+  description = "A Nix-flake-based Go 1.27.3 development environment";
 
   inputs = {
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.2511";
     nixpkgs-unstable.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
+
+    go-tooling = {
+      url = "github:NixOS/nixpkgs/8cec5ef1131078ea76689e84c362b0ed6a1fb6a1";
+      flake = false;
+    };
 
     goreleaser = {
       url = "github:goreleaser/nur/52282e9a2d7c6882e9e0e8675d593b928c89e323";
@@ -11,7 +16,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, goreleaser }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, go-tooling, goreleaser }:
     let
       supportedSystems = [
         "x86_64-linux"
@@ -40,12 +45,24 @@
     {
       devShells = forEachSupportedSystem ({ pkgs, pkgs-unstable, system }:
         let
+          go = pkgs.callPackage "${go-tooling}/pkgs/development/compilers/go/1.27.nix" {
+            buildGo127Module = buildGoModule;
+          };
+          buildGoModule = pkgs.buildGoModule.override { inherit go; };
+          buildGo127Module = pkgs.buildGoModule.override {
+            go = pkgs.callPackage "${go-tooling}/pkgs/development/compilers/go/1.27.nix" {
+              inherit buildGo127Module;
+            };
+          };
+          golangci-lint = pkgs.callPackage "${go-tooling}/pkgs/by-name/go/golangci-lint/package.nix" {
+            inherit buildGo127Module;
+          };
+          mockgen = pkgs.mockgen.override { inherit buildGoModule; };
           stablePackages = with pkgs; [
             ginkgo
-            go_1_26
+            go
             gotools
             just
-            mockgen
             nodejs_22
             protobuf
             protoc-gen-go
@@ -53,16 +70,16 @@
             setup-envtest
             yq-go
           ];
-          unstablePackages = with pkgs-unstable; [
-            golangci-lint
-          ];
+          toolingPackages = [ golangci-lint mockgen ];
           otherPackages = [
             (pkgs.callPackage "${goreleaser}/pkgs/goreleaser-pro" { })
           ];
         in
         {
           default = pkgs.mkShell {
-            packages = stablePackages ++ unstablePackages ++ otherPackages;
+            GOTOOLCHAIN = "local";
+            GOROOT = "${go}/share/go";
+            packages = stablePackages ++ toolingPackages ++ otherPackages;
           };
         }
       );
